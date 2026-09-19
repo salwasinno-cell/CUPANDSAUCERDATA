@@ -1185,6 +1185,19 @@ function handleCellKeydown(e, rIdx, f, cIdx){
   else if(e.key === 'ArrowDown'){ e.preventDefault(); moveVertical(rIdx, f.name, 1); }
   else if(e.key === 'Enter'){ e.preventDefault(); moveVertical(rIdx, f.name, 1); }
   else if(e.key === 'Tab'){ e.preventDefault(); moveHorizontal(rIdx, f.name, e.shiftKey ? -1 : 1); }
+  else if(e.key === 'ArrowLeft'){
+    // Dropdowns have no text caret — always jump a cell. Text/number fields only jump
+    // when the caret already sits at the very start with nothing selected, so normal
+    // in-text cursor movement (fixing a typo mid-word) still works as expected.
+    const el = e.target;
+    const atStart = el.tagName === 'SELECT' || (typeof el.selectionStart === 'number' && el.selectionStart === 0 && el.selectionEnd === 0);
+    if(atStart){ e.preventDefault(); moveHorizontal(rIdx, f.name, -1); }
+  }
+  else if(e.key === 'ArrowRight'){
+    const el = e.target;
+    const atEnd = el.tagName === 'SELECT' || (typeof el.selectionStart === 'number' && el.selectionStart === el.value.length && el.selectionEnd === el.value.length);
+    if(atEnd){ e.preventDefault(); moveHorizontal(rIdx, f.name, 1); }
+  }
 }
 function selectRange(anchorRow, targetRow, colName, cIdx){
   rangeSelection = { colName, startRow: Math.min(anchorRow,targetRow), endRow: Math.max(anchorRow,targetRow) };
