@@ -274,7 +274,7 @@
 
 <!-- Backend config warning (only shows if SUPABASE_URL/KEY weren't filled in) -->
 <div class="config-warning hidden" id="configWarning">
-  Cloud sync is not configured in this HTML yet. Paste your Supabase Project URL and anon/public key into
+  This page hasn't been set up yet — paste your Supabase Project URL and anon key into
   <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code> near the top of this file's
   <code>&lt;script&gt;</code> section (see README-deploy.md). Working in local-only mode until then.
 </div>
@@ -488,7 +488,7 @@
    (Supabase Dashboard → Project Settings → API). See the setup guide
    that was delivered alongside this file for the full step-by-step.
    ======================================================================== */
-const SUPABASE_URL = 'https://thcoiqgxcqbdlnpjnyyr.supabase.co/rest/v1/';
+const SUPABASE_URL = 'https://thcoiqgxcqbdlnpjnyyr.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_n46yu9uesrOYP66NxQWVXA_cqvlGfXJ';
 const IMAGE_BUCKET = 'product-images';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -595,18 +595,6 @@ let preEditSnapshot = null;
 let activityLog = [];       // [{time, text}]
 let selectedRowIds = new Set();
 let autosaveTimer = null;
-// Cloud autosave timers: every edited row is pushed to Supabase shortly after typing,
-// so data is shared across phones/desktops without waiting for blur/change.
-const cloudSaveTimers = {};
-function scheduleCloudRowSave(row, delay=500){
-  if(SUPABASE_NOT_CONFIGURED) return;
-  clearTimeout(cloudSaveTimers[row.id]);
-  cloudSaveTimers[row.id] = setTimeout(()=>{
-    stampEdit(row);
-    persistRow(row);
-    delete cloudSaveTimers[row.id];
-  }, delay);
-}
 let activeViewExtra = null; // 'noimage' | 'noarabic' | 'ready' | null — persists across re-renders
 let lastFocusedCell = null; // {rIdx, colName} — anchor for shift+click range select and nav
 let rangeSelection = null;  // {colName, startRow, endRow}
@@ -827,26 +815,6 @@ async function initApp(){
   setSaveStatus(ok ? 'Synced ✓ · live' : 'Offline — showing local backup, will resync automatically');
   if(ok) startRealtime();
 }
-
-// If the device temporarily loses internet, keep the local backup. As soon as it
-// comes back online, reload the authoritative Supabase data and resume realtime.
-window.addEventListener('online', async ()=>{
-  if(SUPABASE_NOT_CONFIGURED) return;
-  setSaveStatus('Reconnecting to Supabase…');
-  try{
-    const ok = await fetchAllData();
-    if(ok){
-      renderBody();
-      startRealtime();
-      setSaveStatus('Synced ✓ · live');
-    }
-  }catch(err){
-    console.error('Reconnect error', err);
-    setSaveStatus('Sync error — check connection');
-  }
-});
-window.addEventListener('offline', ()=> setSaveStatus('Offline — changes backed up on this device'));
-
 initApp();
 
 const UPLOAD_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#787A70" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
@@ -1389,11 +1357,7 @@ function renderBody(){
         if(rangeSelection){ rangeSelection = null; document.querySelectorAll('.range-selected').forEach(td=>td.classList.remove('range-selected')); }
       });
       el.addEventListener('blur', () => scheduleReleaseEditing(row.id));
-      el.addEventListener('input', e => {
-        row.values[cIdx] = e.target.value;
-        scheduleAutosave();          // local emergency backup
-        scheduleCloudRowSave(row);   // Supabase = shared source of truth
-      });
+      el.addEventListener('input', e => { row.values[cIdx] = e.target.value; });
       el.addEventListener('keydown', e => handleCellKeydown(e, rIdx, f, cIdx));
       el.addEventListener('change', e => {
         row.values[cIdx] = e.target.value;
@@ -2081,11 +2045,6 @@ function buildFocusedField(f, row, cIdx){
 
   el.addEventListener('focus', () => { preEditSnapshot = cloneRows(); markRowEditing(row.id); });
   el.addEventListener('blur', () => scheduleReleaseEditing(row.id));
-  el.addEventListener('input', e => {
-    row.values[cIdx] = e.target.value;
-    scheduleAutosave();
-    scheduleCloudRowSave(row);
-  });
   el.addEventListener('change', e => {
     row.values[cIdx] = e.target.value;
     stampEdit(row);
