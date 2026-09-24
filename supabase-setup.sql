@@ -70,6 +70,10 @@ drop policy if exists "staff read products"   on products;
 drop policy if exists "staff insert products" on products;
 drop policy if exists "staff update products" on products;
 drop policy if exists "staff delete products" on products;
+drop policy if exists "anyone with anon key reads products"   on products;
+drop policy if exists "anyone with anon key inserts products" on products;
+drop policy if exists "anyone with anon key updates products" on products;
+drop policy if exists "anyone with anon key deletes products" on products;
 create policy "anyone with anon key reads products"   on products for select using (true);
 create policy "anyone with anon key inserts products" on products for insert with check (true);
 create policy "anyone with anon key updates products" on products for update using (true);
@@ -77,11 +81,15 @@ create policy "anyone with anon key deletes products" on products for delete usi
 
 drop policy if exists "staff read config"  on app_config;
 drop policy if exists "staff update config" on app_config;
+drop policy if exists "anyone with anon key reads config"  on app_config;
+drop policy if exists "anyone with anon key updates config" on app_config;
 create policy "anyone with anon key reads config"  on app_config for select using (true);
 create policy "anyone with anon key updates config" on app_config for update using (true);
 
 drop policy if exists "staff read activity"  on activity_log;
 drop policy if exists "staff insert activity" on activity_log;
+drop policy if exists "anyone with anon key reads activity"  on activity_log;
+drop policy if exists "anyone with anon key inserts activity" on activity_log;
 create policy "anyone with anon key reads activity"  on activity_log for select using (true);
 create policy "anyone with anon key inserts activity" on activity_log for insert with check (true);
 
@@ -105,6 +113,9 @@ drop policy if exists "staff upload product images" on storage.objects;
 drop policy if exists "staff update product images" on storage.objects;
 drop policy if exists "staff delete product images" on storage.objects;
 drop policy if exists "public read product images"  on storage.objects;
+drop policy if exists "anyone with anon key uploads product images" on storage.objects;
+drop policy if exists "anyone with anon key updates product images" on storage.objects;
+drop policy if exists "anyone with anon key deletes product images" on storage.objects;
 
 create policy "public read product images" on storage.objects
   for select using (bucket_id = 'product-images');
