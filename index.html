@@ -58,6 +58,9 @@
   .btn-brass:hover{background:#BE9744;}
   .btn-danger-ghost{background:transparent;border:1px solid #45464B;color:#C98E86;}
   .btn-danger-ghost:hover{border-color:var(--danger);color:#E4A79E;}
+  .btn-danger{background:var(--danger);border:1px solid var(--danger);color:var(--white);}
+  .btn-danger:hover:not(:disabled){background:#8E3F37;border-color:#8E3F37;}
+  .btn-danger:disabled{opacity:0.4;cursor:not-allowed;}
   .icon-btn{padding:9px 12px;}
 
   /* ---------- Stats + filter strip ---------- */
@@ -448,7 +451,7 @@
       <button class="btn-ghost" onclick="openManageModal()">Manage Lists</button>
       <button class="btn-ghost" onclick="copyAsCSV()">Copy as CSV</button>
       <button class="btn-ghost" onclick="copyAsJSON()">Copy as JSON</button>
-      <button class="btn-danger-ghost" onclick="clearAll()">Clear Sheet</button>
+      <button class="btn-danger-ghost" onclick="openClearSheetModal()">Clear Sheet</button>
     </div>
   </div>
 </div>
@@ -597,6 +600,32 @@
     <div class="modal-footer">
       <input id="newCatInput" placeholder="New category name" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewCategoryFromModal();}">
       <button class="btn-brass" onclick="addNewCategoryFromModal()">+ Add Category</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear Sheet — multi-step confirmation, since this permanently deletes every product for the whole team -->
+<div class="modal-overlay hidden" id="clearSheetModal">
+  <div class="modal-panel" style="max-width:460px;">
+    <div class="modal-header"><h2>Clear Entire Sheet</h2><button onclick="closeClearSheetModal()">✕</button></div>
+    <div class="modal-body">
+      <p id="clearSheetCount" style="color:var(--danger);font-weight:700;font-size:15px;margin:0 0 10px;"></p>
+      <p style="color:var(--ink-soft);font-size:12.5px;line-height:1.6;margin:0 0 18px;">
+        This deletes every product and every photo for the whole team, not just on this device —
+        everyone signed in will see an empty sheet. There is no undo once this finishes.
+      </p>
+      <label style="display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.5;margin-bottom:18px;cursor:pointer;">
+        <input type="checkbox" id="clearSheetAck" onchange="updateClearSheetGate()" style="margin-top:2px;">
+        <span>I understand this permanently deletes all products for everyone on the team and cannot be undone.</span>
+      </label>
+      <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--ink-soft);margin-bottom:6px;">Type <strong>DELETE</strong> to confirm</label>
+      <input type="text" id="clearSheetTypeConfirm" placeholder="Type DELETE" autocomplete="off"
+        oninput="updateClearSheetGate()"
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--hairline-strong);font-family:inherit;font-size:13px;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeClearSheetModal()">Cancel</button>
+      <button class="btn-danger" id="clearSheetConfirmBtn" disabled onclick="performClearAll()">Clear Everything</button>
     </div>
   </div>
 </div>
@@ -1067,11 +1096,32 @@ function duplicateRow(idx){
     rows.splice(idx+1, 0, copy);
   });
 }
-function clearAll(){
-  if(rows.length && !confirm("Clear the entire sheet? This cannot be undone.")) return;
+function openClearSheetModal(){
+  if(!rows.length){ alert('The sheet is already empty.'); return; }
+  document.getElementById('clearSheetCount').textContent =
+    `This will permanently delete all ${rows.length} product${rows.length===1?'':'s'} on this sheet.`;
+  document.getElementById('clearSheetAck').checked = false;
+  document.getElementById('clearSheetTypeConfirm').value = '';
+  updateClearSheetGate();
+  document.getElementById('clearSheetModal').classList.remove('hidden');
+  document.getElementById('clearSheetTypeConfirm').focus();
+}
+function closeClearSheetModal(){
+  document.getElementById('clearSheetModal').classList.add('hidden');
+}
+function updateClearSheetGate(){
+  const ack = document.getElementById('clearSheetAck').checked;
+  const typed = document.getElementById('clearSheetTypeConfirm').value.trim();
+  document.getElementById('clearSheetConfirmBtn').disabled = !(ack && typed === 'DELETE');
+}
+function performClearAll(){
+  const ack = document.getElementById('clearSheetAck').checked;
+  const typed = document.getElementById('clearSheetTypeConfirm').value.trim();
+  if(!ack || typed !== 'DELETE') return; // belt-and-suspenders; button is already disabled until both are true
   const imgUrls = rows.map(r=>r.values[IDX["Product Image"]]);
   mutateWithHistory('Cleared entire sheet', ()=>{ rows = []; selectedRowIds.clear(); });
   imgUrls.forEach(deleteProductImageByUrl);
+  closeClearSheetModal();
 }
 
 /* ========================================================================
