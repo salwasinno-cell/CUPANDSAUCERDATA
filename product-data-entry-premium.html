@@ -6,6 +6,7 @@
 <title>Master Product Data Entry</title>
 <style>
   :root{
+    --thumb-size:84px;
     --charcoal:#1B1C1F;
     --charcoal-2:#25262A;
     --ivory:#FAF9F5;
@@ -74,7 +75,7 @@
 
   /* ---------- Sheet container ---------- */
   .sheet-wrap{max-width:1700px;margin:0 auto 100px;padding:0 32px;}
-  .sheet-card{background:var(--white);border:1px solid var(--hairline-strong);box-shadow:0 1px 2px rgba(27,28,31,0.04), 0 12px 28px rgba(27,28,31,0.06);overflow:hidden;}
+  .sheet-card{background:var(--white);border:1px solid var(--hairline-strong);box-shadow:0 1px 2px rgba(27,28,31,0.04), 0 12px 28px rgba(27,28,31,0.06);overflow:hidden;position:relative;}
   .scroll-mirror{overflow-x:auto;overflow-y:hidden;height:16px;border-bottom:1px solid var(--hairline-strong);background:var(--ivory-2);}
   .scroll-mirror-inner{height:1px;}
   .scroll-mirror::-webkit-scrollbar{height:10px;}
@@ -82,6 +83,7 @@
   .scroll-mirror::-webkit-scrollbar-track{background:var(--ivory-2);}
   .table-scroll{overflow-x:auto;max-height:66vh;overflow-y:auto;}
   table{border-collapse:separate;border-spacing:0;min-width:100%;}
+  .grid-empty-state{display:none;align-items:center;justify-content:center;text-align:center;padding:70px 20px;color:var(--ink-soft);font-size:13px;background:var(--white);}
   thead th{position:sticky;font-weight:600;padding:0;white-space:nowrap;text-align:left;z-index:3;}
   thead tr.group th{top:0;background:var(--charcoal-2);color:var(--brass-light);font-size:10px;letter-spacing:1.1px;text-transform:uppercase;padding:9px 14px;border-right:1px solid #35363B;border-bottom:1px solid #000;}
   thead tr.group th.rowno-head{background:var(--charcoal);left:0;z-index:5;}
@@ -136,14 +138,27 @@
   .sku-gen{border:none;background:transparent;color:var(--brass-dim);font-size:13px;cursor:pointer;padding:0 10px;flex-shrink:0;}
   .sku-gen:hover{color:var(--brass);}
 
-  .image-cell{display:flex;align-items:center;gap:8px;padding:7px 12px;min-width:150px;}
-  .img-thumb{width:34px;height:34px;flex-shrink:0;border-radius:3px;border:1.5px dashed var(--hairline-strong);background:var(--ivory-2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;padding:0;}
+  .image-cell{display:flex;align-items:center;gap:10px;padding:10px 12px;min-width:220px;}
+  .img-thumb{width:var(--thumb-size);height:var(--thumb-size);flex-shrink:0;border-radius:6px;border:1.5px dashed var(--hairline-strong);background:var(--ivory-2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;padding:0;transition:width 0.15s ease, height 0.15s ease;}
   .img-thumb:hover{border-color:var(--brass);background:var(--brass-light);}
   .img-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
-  .img-thumb svg{width:15px;height:15px;}
-  .img-name{font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;}
+  .img-thumb svg{width:22px;height:22px;}
+  .img-name{font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;}
   .img-remove{border:none;background:transparent;color:var(--danger);font-size:13px;cursor:pointer;opacity:0.5;flex-shrink:0;padding:2px;}
   .img-remove:hover{opacity:1;}
+
+  /* ---------- Image size control (header icon + popover) ---------- */
+  .th-image-head{display:flex;align-items:center;gap:6px;position:relative;}
+  .img-size-btn{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--hairline-strong);border-radius:4px;background:var(--white);color:var(--ink-soft);cursor:pointer;padding:0;}
+  .img-size-btn:hover{border-color:var(--brass);color:var(--brass-dim);}
+  .img-size-btn svg{width:12px;height:12px;}
+  .img-size-menu{display:none;position:absolute;top:24px;left:0;z-index:40;background:var(--white);border:1px solid var(--hairline-strong);border-radius:6px;box-shadow:0 8px 24px rgba(27,28,31,0.14);padding:6px;min-width:150px;font-weight:400;text-transform:none;letter-spacing:normal;}
+  .img-size-menu.show{display:block;}
+  .img-size-menu .opt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--ink);white-space:nowrap;}
+  .img-size-menu .opt:hover{background:var(--ivory-2);}
+  .img-size-menu .opt.active{color:var(--brass-dim);font-weight:600;}
+  .img-size-menu .opt .check{opacity:0;font-size:11px;}
+  .img-size-menu .opt.active .check{opacity:1;}
 
   footer.note{max-width:1700px;margin:0 auto 40px;padding:0 32px;font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   footer.note .dot{width:5px;height:5px;border-radius:50%;background:var(--brass);display:inline-block;}
@@ -228,6 +243,7 @@
   .pv-badge{display:inline-block;font-size:10.5px;padding:3px 8px;border-radius:2px;background:var(--danger-light);color:var(--danger);margin-right:6px;}
   .pv-stock-ok{color:var(--ok);font-weight:600;}
   .pv-stock-out{color:var(--danger);font-weight:600;}
+  .pv-stock-low{color:var(--warn);font-weight:600;}
   .pv-footer{margin-top:16px;padding-top:14px;border-top:1px dashed var(--hairline-strong);font-size:11px;color:var(--ink-soft);line-height:1.7;}
 
   .history-item{padding:9px 0;border-bottom:1px solid var(--hairline);font-size:12px;}
@@ -414,7 +430,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>8 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product</div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product</div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -489,7 +505,7 @@
     <select id="fStock" onchange="applyFilters()">
       <option value="">All</option>
       <option value="in">In Stock</option>
-      <option value="low">Low Stock (≤5)</option>
+      <option value="low">Low Stock</option>
       <option value="out">Out of Stock</option>
     </select>
   </div>
@@ -519,6 +535,7 @@
         <tbody id="tbody"></tbody>
       </table>
     </div>
+    <div class="grid-empty-state" id="gridEmptyState">No products yet — click "+ Add Product" above to start.</div>
   </div>
 </div>
 
@@ -545,7 +562,7 @@
     <option value="Brand">Brand</option>
     <option value="Material">Material</option>
     <option value="Color">Color</option>
-    <option value="Fragile">Fragile</option>
+    <option value="Stock Status">Stock Status</option>
     <option value="Review Status">Review Status</option>
   </select>
   <span id="bulkValueWrap"></span>
@@ -651,8 +668,8 @@ const MATERIALS_BY_CATEGORY = {
 };
 
 const COLORS = ["White","Ivory","Burgundy","Gold","Silver","Black","Navy","Green","Terracotta","Multicolor"];
-const YESNO = ["Yes","No"];
 const REVIEW_STATUSES = ["Draft","In Review","Approved","Published"];
+const STOCK_STATUSES = ["Out of Stock","Low Stock","In Stock"];
 
 const NOT_APPLICABLE = {
   "Tableware": ["Capacity"],
@@ -661,7 +678,7 @@ const NOT_APPLICABLE = {
 
 const schema = [
   { section: "Identification", fields: [
-    { name:"Product Image 1", type:"image" },
+    { name:"Product Image", type:"image" },
     { name:"Product Name EN", type:"text", required:true },
     { name:"Product Name AR", type:"text", required:true, rtl:true },
     { name:"SKU", type:"text", required:true, dupeCheck:true },
@@ -694,14 +711,7 @@ const schema = [
     { name:"Regular Price", type:"number", required:true, min:0.01 },
   ]},
   { section: "Inventory", fields: [
-    { name:"Stock Quantity", type:"number", required:true, min:0, integer:true },
-  ]},
-  { section: "Delivery Data", fields: [
-    { name:"Package Weight", type:"number" },
-    { name:"Package Length", type:"number" },
-    { name:"Package Width", type:"number" },
-    { name:"Package Height", type:"number" },
-    { name:"Fragile", type:"combo", options: YESNO },
+    { name:"Stock Status", type:"select", required:true, options: STOCK_STATUSES },
   ]},
   { section: "Workflow", fields: [
     { name:"Assigned To", type:"combo-staff" },
@@ -944,7 +954,6 @@ async function initApp(){
   let ok = false;
   try{ ok = await fetchAllData(); }catch(err){ console.error('Initial load error', err); }
   if(!ok){ loadState(); } // offline fallback: last snapshot saved to this browser
-  if(!rows.length && ok){ for(let i=0;i<6;i++) rows.push(newRow()); }
   renderBody();
   updateUndoRedoButtons();
   setSaveStatus(ok ? 'Synced ✓ · live' : 'Offline — showing local backup, will resync automatically');
@@ -953,6 +962,44 @@ async function initApp(){
 initApp();
 
 const UPLOAD_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#787A70" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
+
+/* ---- Product photo thumbnail size control (personal display preference, this browser only) ---- */
+const GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+const THUMB_SIZES = [
+  { label:'Small',   px:34  },
+  { label:'Medium',  px:56  },
+  { label:'Large',   px:84  },
+  { label:'X-Large', px:120 },
+];
+function getThumbSize(){
+  return parseInt(localStorage.getItem('cs_pde_thumb_size'), 10) || 84; // 84 = Large, the new default
+}
+function applyThumbSize(){
+  document.documentElement.style.setProperty('--thumb-size', getThumbSize() + 'px');
+}
+function renderThumbSizeMenu(){
+  const menu = document.getElementById('imgSizeMenu');
+  if(!menu) return;
+  const current = getThumbSize();
+  menu.innerHTML = THUMB_SIZES.map(s =>
+    `<div class="opt ${s.px===current?'active':''}" onclick="event.stopPropagation(); setThumbSize(${s.px});">${s.label}<span class="check">✓</span></div>`
+  ).join('');
+}
+function setThumbSize(px){
+  localStorage.setItem('cs_pde_thumb_size', px);
+  applyThumbSize();
+  renderThumbSizeMenu();
+  toggleImgSizeMenu(false);
+}
+function toggleImgSizeMenu(force){
+  const menu = document.getElementById('imgSizeMenu');
+  if(!menu) return;
+  const show = force !== undefined ? force : !menu.classList.contains('show');
+  if(show) renderThumbSizeMenu();
+  menu.classList.toggle('show', show);
+}
+document.addEventListener('click', () => toggleImgSizeMenu(false));
+applyThumbSize();
 
 /* ========================================================================
    ROW HELPERS
@@ -983,7 +1030,7 @@ function addRow(){ mutateWithHistory('Added a new product row', ()=>{ rows.push(
 function addRows(n){ mutateWithHistory(`Added ${n} product rows`, ()=>{ for(let i=0;i<n;i++) rows.push(newRow()); }); }
 function deleteRow(idx){
   const row = rows[idx];
-  const imgUrl = row.values[IDX["Product Image 1"]];
+  const imgUrl = row.values[IDX["Product Image"]];
   mutateWithHistory(`Deleted product #${idx+1}`, ()=>{ rows.splice(idx,1); });
   deleteProductImageByUrl(imgUrl);
 }
@@ -1022,7 +1069,7 @@ function duplicateRow(idx){
 }
 function clearAll(){
   if(rows.length && !confirm("Clear the entire sheet? This cannot be undone.")) return;
-  const imgUrls = rows.map(r=>r.values[IDX["Product Image 1"]]);
+  const imgUrls = rows.map(r=>r.values[IDX["Product Image"]]);
   mutateWithHistory('Cleared entire sheet', ()=>{ rows = []; selectedRowIds.clear(); });
   imgUrls.forEach(deleteProductImageByUrl);
 }
@@ -1060,7 +1107,6 @@ const DIMENSION_FIELDS = ["Width","Length","Height","Depth","Diameter","Capacity
 function isFieldInvalid(f, value){
   if(!value || !value.toString().trim()) return false;
   if(f.name === "Regular Price"){ const n=parseFloat(value); return !(n>0); }
-  if(f.name === "Stock Quantity"){ const n=parseFloat(value); return !(Number.isInteger(n) && n>=0); }
   if(DIMENSION_FIELDS.includes(f.name)){ const n=parseFloat(value); return !(n>0); }
   return false;
 }
@@ -1068,7 +1114,7 @@ function rowHasInvalid(row){
   return flatFields.some((f,i)=> isFieldInvalid(f, row.values[i]));
 }
 function rowHasImage(row){
-  return !!(row.values[IDX["Product Image 1"]] && row.values[IDX["Product Image 1"]].trim());
+  return !!(row.values[IDX["Product Image"]] && row.values[IDX["Product Image"]].trim());
 }
 function rowHasAnyValue(row){
   return row.values.some(v => v && v.toString().trim() !== "");
@@ -1102,11 +1148,11 @@ function rowMissingDimensions(row){
   return DIMENSION_FIELDS.filter(n=>n!=="Capacity").some(n => !(row.values[IDX[n]]||'').toString().trim());
 }
 function stockStatusOf(row){
-  const n = parseInt(row.values[IDX["Stock Quantity"]],10);
-  if(isNaN(n)) return '';
-  if(n<=0) return 'out';
-  if(n<=5) return 'low';
-  return 'in';
+  const v = row.values[IDX["Stock Status"]];
+  if(v === "Out of Stock") return 'out';
+  if(v === "Low Stock") return 'low';
+  if(v === "In Stock") return 'in';
+  return '';
 }
 function isAddedToday(row){
   if(!row.createdAt) return false;
@@ -1271,7 +1317,15 @@ function buildHead(){
   fieldRow.innerHTML = `<th class="rowno-head"></th>`;
   flatFields.forEach(f => {
     const th = document.createElement('th');
-    th.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '');
+    if(f.type === 'image'){
+      th.innerHTML = `<div class="th-image-head">
+        <span>${f.name}${f.required ? '<span class="req">*</span>' : ''}</span>
+        <button type="button" class="img-size-btn" title="Photo size" onclick="event.stopPropagation(); toggleImgSizeMenu();">${GEAR_ICON}</button>
+        <div class="img-size-menu" id="imgSizeMenu"></div>
+      </div>`;
+    } else {
+      th.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '');
+    }
     fieldRow.appendChild(th);
   });
   thead.appendChild(groupRow);
@@ -1485,7 +1539,6 @@ function renderBody(){
       if(disabled) el.disabled = true;
       if(!disabled && isFieldInvalid(f, row.values[cIdx])){
         if(f.name==="Regular Price") el.title = "Price must be greater than 0";
-        else if(f.name==="Stock Quantity") el.title = "Stock must be a whole number, 0 or more";
         else el.title = "This dimension must be greater than 0";
       }
 
@@ -1573,7 +1626,7 @@ function renderBody(){
     const sku = (row.values[IDX["SKU"]] || "").trim();
     const category = row.values[IDX["Main Category"]];
     const price = (row.values[IDX["Regular Price"]] || "").trim();
-    const imgUrl = row.values[IDX["Product Image 1"]];
+    const imgUrl = row.values[IDX["Product Image"]];
     const subLine = [sku ? `SKU ${sku}` : "No SKU yet", category].filter(Boolean).join(" · ");
 
     const card = document.createElement('div');
@@ -1606,6 +1659,7 @@ function renderBody(){
   if(!rows.length){
     mobileCards.innerHTML = `<div class="mcard-empty">No products yet — tap the + button to add one.</div>`;
   }
+  document.getElementById('gridEmptyState').style.display = rows.length ? 'none' : 'flex';
   updateStats();
   applyFilters();
   syncMirrorWidth();
@@ -1805,7 +1859,7 @@ function updateBulkValueControl(){
   let el;
   if(field === "Main Category"){ el = document.createElement('select'); dynamicCategories.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else if(field === "Color"){ el = document.createElement('select'); COLORS.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
-  else if(field === "Fragile"){ el = document.createElement('select'); YESNO.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
+  else if(field === "Stock Status"){ el = document.createElement('select'); STOCK_STATUSES.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else if(field === "Review Status"){ el = document.createElement('select'); REVIEW_STATUSES.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else { el = document.createElement('input'); el.type='text'; el.placeholder='Value…'; }
   el.id = 'bulkValueControl';
@@ -1836,7 +1890,7 @@ function bulkDelete(){
   if(!selectedRowIds.size) return;
   if(!confirm(`Delete ${selectedRowIds.size} selected product(s)? This cannot be undone by anyone else on this device.`)) return;
   const n = selectedRowIds.size;
-  const imgUrls = rows.filter(r=>selectedRowIds.has(r.id)).map(r=>r.values[IDX["Product Image 1"]]);
+  const imgUrls = rows.filter(r=>selectedRowIds.has(r.id)).map(r=>r.values[IDX["Product Image"]]);
   mutateWithHistory(`Bulk deleted ${n} product(s)`, ()=>{
     rows = rows.filter(r=>!selectedRowIds.has(r.id));
     selectedRowIds.clear();
@@ -2052,9 +2106,9 @@ function onListsChanged(){ renderBody(); scheduleAutosave(); scheduleConfigSave(
 function openPreview(rIdx){
   const row = rows[rIdx];
   const v = name => row.values[IDX[name]] || '';
-  const preview = row.values[IDX["Product Image 1"]];
+  const preview = row.values[IDX["Product Image"]];
   const price = v('Regular Price');
-  const stock = parseInt(v('Stock Quantity'),10);
+  const stockStatus = v('Stock Status');
   const dims = ["Width","Length","Height"].map(v2=>v(v2)).filter(Boolean).join(' × ');
   const status = computeStatus(row);
   const pct = rowCompletionPct(row);
@@ -2068,14 +2122,13 @@ function openPreview(rIdx){
     <div class="pv-price">${price ? '$' + parseFloat(price).toFixed(2) : 'No price set'}</div>
     <div style="margin-bottom:10px;">
       <span class="pv-badge" style="background:var(--brass-light);color:#4A3B1D;">${status} · ${pct}%</span>
-      ${v('Fragile')==='Yes' ? '<span class="pv-badge">Fragile</span>' : ''}
     </div>
     <div class="pv-desc">${v('Description EN') || '<span style="color:var(--ink-soft);">No description yet.</span>'}</div>
     <div class="pv-row"><span>SKU</span><span>${v('SKU') || '—'}</span></div>
     <div class="pv-row"><span>Barcode</span><span>${v('Barcode / EAN / UPC') || '—'}</span></div>
     <div class="pv-row"><span>Material / Color</span><span>${[v('Material'), v('Color')].filter(Boolean).join(' · ') || '—'}</span></div>
     <div class="pv-row"><span>Dimensions</span><span>${dims ? dims + ' cm' : '—'}</span></div>
-    <div class="pv-row"><span>Stock</span><span class="${stock>0 ? 'pv-stock-ok' : 'pv-stock-out'}">${isNaN(stock) ? '—' : (stock>0 ? stock+' in stock' : 'Out of stock')}</span></div>
+    <div class="pv-row"><span>Stock</span><span class="${stockStatus==='In Stock' ? 'pv-stock-ok' : stockStatus==='Low Stock' ? 'pv-stock-low' : stockStatus==='Out of Stock' ? 'pv-stock-out' : ''}">${stockStatus || '—'}</span></div>
     <div class="pv-row"><span>Assigned to</span><span>${v('Assigned To') || '—'}</span></div>
     <div class="pv-footer">
       Created by ${row.createdBy || 'Unassigned'} · ${new Date(row.createdAt).toLocaleString()}<br>
@@ -2100,9 +2153,8 @@ const FOCUSED_STEPS = [
   { key:'dimensions', label:'04 Dimensions', section:'Dimensions' },
   { key:'pricing', label:'05 Pricing', section:'Pricing' },
   { key:'inventory', label:'06 Inventory', section:'Inventory' },
-  { key:'delivery', label:'07 Delivery Data', section:'Delivery Data' },
-  { key:'workflow', label:'08 Workflow', section:'Workflow' },
-  { key:'review', label:'09 Review & Publish', section:null },
+  { key:'workflow', label:'07 Workflow', section:'Workflow' },
+  { key:'review', label:'08 Review & Publish', section:null },
 ];
 
 let focusedRowIdx = 0;
@@ -2265,7 +2317,7 @@ function buildFocusedField(f, row, cIdx){
   }
   if(!disabled && isFieldInvalid(f, row.values[cIdx])){
     const note = document.createElement('div'); note.className='field-note';
-    note.textContent = f.name==="Regular Price" ? "Price must be greater than 0" : f.name==="Stock Quantity" ? "Stock must be a whole number, 0 or more" : "This dimension must be greater than 0";
+    note.textContent = f.name==="Regular Price" ? "Price must be greater than 0" : "This dimension must be greater than 0";
     wrap.appendChild(note);
   }
 
@@ -2329,7 +2381,7 @@ function buildFocusedImageField(f, row, cIdx){
 
 function renderFocusedReview(content, row){
   const v = name => row.values[IDX[name]] || '';
-  const preview = row.values[IDX["Product Image 1"]];
+  const preview = row.values[IDX["Product Image"]];
   const card = document.createElement('div');
   card.className = 'review-card';
   card.innerHTML = `
@@ -2340,7 +2392,7 @@ function renderFocusedReview(content, row){
     <div class="pv-price">${v('Regular Price') ? '$' + parseFloat(v('Regular Price')).toFixed(2) : 'No price set'}</div>
     <div class="pv-desc">${v('Description EN') || '<span style="color:var(--ink-soft);">No description yet.</span>'}</div>
     <div class="pv-row"><span>SKU</span><span>${v('SKU') || '—'}</span></div>
-    <div class="pv-row"><span>Stock</span><span>${v('Stock Quantity') || '—'}</span></div>
+    <div class="pv-row"><span>Stock</span><span>${v('Stock Status') || '—'}</span></div>
     <div class="pv-row"><span>Current Review Status</span><span>${v('Review Status') || 'Draft'}</span></div>
   `;
   content.appendChild(card);
