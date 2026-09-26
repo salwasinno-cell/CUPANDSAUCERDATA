@@ -92,6 +92,7 @@
   thead tr.group th.rowno-head{background:var(--charcoal);left:0;z-index:5;}
   thead tr.field th{top:35px;background:var(--ivory-2);color:var(--ink);font-size:11.5px;padding:10px 14px;border-right:1px solid var(--hairline);border-bottom:1px solid var(--hairline-strong);}
   thead tr.field th .req{color:var(--danger);margin-left:2px;}
+  .th-unit{color:var(--ink-soft);font-weight:400;font-size:10.5px;margin-left:5px;text-transform:none;}
   thead tr.field th.rowno-head{left:0;z-index:4;background:var(--ivory-2);border-right:1px solid var(--hairline-strong);}
   tbody td{border-right:1px solid var(--hairline);border-bottom:1px solid var(--hairline);padding:0;background:var(--white);position:relative;}
   tbody tr:nth-child(even) td{background:#FCFBF8;}
@@ -136,10 +137,16 @@
   .unit-wrap input.cell{flex:1;min-width:70px;}
   .unit-suffix{font-size:11px;color:var(--ink-soft);padding-right:12px;white-space:nowrap;pointer-events:none;}
 
-  .sku-wrap{display:flex;align-items:center;width:100%;}
-  .sku-wrap input.cell{flex:1;min-width:100px;}
-  .sku-gen{border:none;background:transparent;color:var(--brass-dim);font-size:13px;cursor:pointer;padding:0 10px;flex-shrink:0;}
-  .sku-gen:hover{color:var(--brass);}
+  .translate-wrap{display:flex;align-items:center;width:100%;}
+  .translate-wrap input.cell{flex:1;min-width:90px;}
+  .translate-btn{border:none;background:transparent;color:var(--brass-dim);cursor:pointer;padding:0 10px;flex-shrink:0;display:flex;align-items:center;}
+  .translate-btn:hover{color:var(--brass);}
+  .translate-btn:disabled{opacity:0.5;cursor:wait;}
+  .translate-btn svg{width:16px;height:16px;}
+  .f-translate-btn{border:1px solid var(--hairline-strong);background:var(--white);color:var(--brass-dim);cursor:pointer;padding:6px 10px;margin-left:8px;border-radius:4px;display:inline-flex;align-items:center;gap:6px;font-size:12px;vertical-align:middle;}
+  .f-translate-btn:hover{border-color:var(--brass);color:var(--brass);}
+  .f-translate-btn:disabled{opacity:0.5;cursor:wait;}
+  .f-translate-btn svg{width:14px;height:14px;}
 
   .image-cell{display:flex;align-items:center;gap:10px;padding:10px 12px;min-width:220px;}
   .img-thumb{width:var(--thumb-size);height:var(--thumb-size);flex-shrink:0;border-radius:6px;border:1.5px dashed var(--hairline-strong);background:var(--ivory-2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;padding:0;transition:width 0.15s ease, height 0.15s ease;}
@@ -696,7 +703,7 @@ const MATERIALS_BY_CATEGORY = {
   "Home & Living": ["Glass","Ceramic","Wood","Metal","Resin","Rattan","Cotton","Linen","Stainless Steel","Cast Iron","Non-Stick Aluminum","Stone","Concrete"]
 };
 
-const COLORS = ["White","Ivory","Burgundy","Gold","Silver","Black","Navy","Green","Terracotta","Multicolor"];
+const COLORS = ["White","Ivory","Burgundy","Gold","Silver","Black","Navy","Green","Terracotta","Transparent","Multicolor"];
 const REVIEW_STATUSES = ["Draft","In Review","Approved","Published"];
 const STOCK_STATUSES = ["Out of Stock","Low Stock","In Stock"];
 
@@ -729,15 +736,15 @@ const schema = [
     { name:"Care Instructions", type:"text" },
   ]},
   { section: "Dimensions", fields: [
-    { name:"Width", type:"number", unit:"cm" },
-    { name:"Length", type:"number", unit:"cm" },
-    { name:"Height", type:"number" },
-    { name:"Depth", type:"number", unit:"cm" },
-    { name:"Diameter", type:"number" },
-    { name:"Capacity", type:"number", dynamicUnit:true },
+    { name:"Width", type:"number", unit:"cm", headerUnit:"cm" },
+    { name:"Length", type:"number", unit:"cm", headerUnit:"cm" },
+    { name:"Height", type:"number", unit:"cm", headerUnit:"cm" },
+    { name:"Depth", type:"number", unit:"cm", headerUnit:"cm" },
+    { name:"Diameter", type:"number", unit:"cm", headerUnit:"cm" },
+    { name:"Capacity", type:"number", dynamicUnit:true, headerUnit:"mL" },
   ]},
   { section: "Pricing", fields: [
-    { name:"Regular Price", type:"number", required:true, min:0.01 },
+    { name:"Regular Price", type:"number", required:true, min:0.01, headerUnit:"$" },
   ]},
   { section: "Inventory", fields: [
     { name:"Stock Status", type:"select", required:true, options: STOCK_STATUSES },
@@ -1031,11 +1038,163 @@ document.addEventListener('click', () => toggleImgSizeMenu(false));
 applyThumbSize();
 
 /* ========================================================================
+   ARABIC AUTO-TRANSLATE
+   Honest note on how this works: there is no paid/official translation
+   service wired into this app. This calls a free, unofficial Google
+   Translate endpoint directly from the browser — no API key needed, but
+   also no uptime guarantee, no rate-limit guarantee, and machine-translation
+   quality (a solid first draft, not a substitute for an Arabic speaker's
+   review before publishing). If Google ever blocks/changes this endpoint,
+   the button will simply show an error — nothing else in the app depends
+   on it working.
+   ======================================================================== */
+const TRANSLATE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h9M9 5v3M12 5c-1 4-4 7-8 8"/><path d="M13 21l4-9 4 9M14.5 18h5"/></svg>`;
+async function translateEnglishToArabic(text){
+  const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(text)}`);
+  if(!res.ok) throw new Error('Translation service unavailable (HTTP ' + res.status + ')');
+  const data = await res.json();
+  return data[0].map(chunk => chunk[0]).join('');
+}
+async function handleTranslateClick(btn, row, cIdx, sourceFieldName, onDone){
+  const sourceIdx = IDX[sourceFieldName];
+  const sourceText = (sourceIdx > -1 ? (row.values[sourceIdx] || '') : '').trim();
+  if(!sourceText){ alert(`Fill in "${sourceFieldName}" first, then translate.`); return; }
+  const original = btn.innerHTML;
+  btn.innerHTML = '…';
+  btn.disabled = true;
+  try{
+    const translated = await translateEnglishToArabic(sourceText);
+    btn.innerHTML = original;
+    btn.disabled = false;
+    if(!translated || !translated.trim()){ alert('Translation came back empty — please type the Arabic text manually.'); return; }
+    mutateWithHistory(`Row: ${sourceFieldName} translated to Arabic`, ()=>{
+      row.values[cIdx] = translated;
+      stampEdit(row);
+    });
+    if(onDone) onDone();
+  }catch(err){
+    btn.innerHTML = original;
+    btn.disabled = false;
+    console.error('Translation failed', err);
+    alert("Couldn't reach the translation service (this uses a free, unofficial endpoint that isn't always available). Please type the Arabic text manually, or try again in a moment.");
+  }
+}
+
+/* ========================================================================
    ROW HELPERS
    ======================================================================== */
 function newRow(){
   return { id: newId(), values: new Array(flatFields.length).fill(""), createdAt: Date.now(), createdBy: currentUser || 'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser || 'Unassigned' };
 }
+/* ========================================================================
+   DESCRIPTION GENERATOR
+   Honest note: this is NOT a call to Claude/ChatGPT or any AI service —
+   there's no AI wired into this app (that would need a backend to hide an
+   API key, which this static-page + Supabase setup doesn't have). This is
+   a smart template composer: it writes real, varied, grammatically-correct
+   sentences by combining whichever fields you've already filled in
+   (material, color, dimensions, pieces, care, etc.). It's a strong first
+   draft to edit, not a finished, human-reviewed description.
+   ======================================================================== */
+const GENERATE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>`;
+function pickVariant(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function lc(s){ return (s||'').toString().trim(); }
+function joinNatural(arr){
+  if(arr.length===0) return '';
+  if(arr.length===1) return arr[0];
+  if(arr.length===2) return arr[0] + ' and ' + arr[1];
+  return arr.slice(0,-1).join(', ') + ', and ' + arr[arr.length-1];
+}
+function composeProductDescription(row){
+  const v = name => lc(row.values[IDX[name]]);
+  const name = v('Product Name EN') || 'This piece';
+  const category = v('Main Category');
+  const subcategory = v('Subcategory');
+  const brand = v('Brand');
+  const color = v('Color');
+  const material = v('Material');
+  const pieces = v('Pieces Number');
+  const persons = v('Suitable For / Persons');
+  const included = v('Included Pieces');
+  const care = v('Care Instructions');
+  const capacity = v('Capacity');
+  const dims = ['Width','Length','Height','Depth','Diameter'].map(f => ({label:f, val:v(f)})).filter(d => d.val);
+
+  const kind = (subcategory || category || 'piece').toLowerCase();
+  const colorDistinctFromMaterial = color && (!material || color.toLowerCase() !== material.toLowerCase());
+
+  // --- Opening sentence: always present, adapts to whatever data exists ---
+  let opening;
+  if(material && colorDistinctFromMaterial){
+    opening = pickVariant([
+      `${name} is a beautifully crafted ${kind}, finished in an elegant ${color.toLowerCase()} tone and made from premium ${material.toLowerCase()}.`,
+      `Combining ${material.toLowerCase()} craftsmanship with a striking ${color.toLowerCase()} finish, ${name} brings understated elegance to any collection.`,
+      `${name} pairs the natural beauty of ${material.toLowerCase()} with a refined ${color.toLowerCase()} finish, creating a ${kind} that feels both timeless and modern.`
+    ]);
+  } else if(material){
+    opening = pickVariant([
+      `${name} is thoughtfully crafted from ${material.toLowerCase()}, offering both durability and timeless appeal.`,
+      `Made from quality ${material.toLowerCase()}, ${name} brings lasting craftsmanship to everyday use.`
+    ]);
+  } else if(color){
+    opening = pickVariant([
+      `${name} stands out with its elegant ${color.toLowerCase()} finish, designed to complement a range of styles.`,
+      `Finished in a beautiful ${color.toLowerCase()} tone, ${name} adds a refined touch to any setting.`
+    ]);
+  } else {
+    opening = pickVariant([
+      `${name} is a beautifully designed ${kind}${brand ? ' from ' + brand : ''}, made to bring lasting charm to your everyday moments.`,
+      `${name} is thoughtfully designed${brand ? ' by ' + brand : ''}, blending quality and style in equal measure.`
+    ]);
+  }
+
+  // --- Detail sentence: dimensions / capacity / pieces / persons, only if present ---
+  const detailParts = [];
+  dims.forEach(d => detailParts.push(`a ${d.label.toLowerCase()} of ${d.val} cm`));
+  if(capacity) detailParts.push(`a generous capacity of ${capacity} mL`);
+  if(pieces) detailParts.push(`a set of ${pieces} piece${pieces==='1'?'':'s'}`);
+  if(persons) detailParts.push(`comfortable use for ${persons} ${persons==='1'?'person':'people'}`);
+  let detailSentence = '';
+  if(detailParts.length){
+    detailSentence = pickVariant([
+      `It comes with ${joinNatural(detailParts)}, making it a practical addition to your table or home.`,
+      `Featuring ${joinNatural(detailParts)}, it's designed for both everyday use and special occasions.`
+    ]);
+  }
+
+  // --- Care/inclusions sentence, only if present ---
+  const careParts = [];
+  if(included) careParts.push(`Includes ${included.toLowerCase()}.`);
+  if(care) careParts.push(pickVariant([`Care instructions: ${care}.`, `To keep it looking its best: ${care}.`]));
+  const careSentence = careParts.join(' ');
+
+  // --- Closing sentence: always present, varied ---
+  const closing = pickVariant([
+    `A wonderful choice for those who appreciate quality and detail in equal measure.`,
+    `An effortless way to bring a touch of everyday luxury into your home.`,
+    `Perfect for gifting or for treating yourself to something special.`,
+    `A piece that's as practical as it is beautiful — made to be used and loved for years to come.`
+  ]);
+
+  return [opening, detailSentence, careSentence, closing].filter(Boolean).join(' ');
+}
+async function handleGenerateDescriptionClick(btn, row, cIdx, onDone){
+  const original = btn.innerHTML;
+  btn.innerHTML = '…';
+  btn.disabled = true;
+  await new Promise(r => setTimeout(r, 250)); // brief pause so the click feels intentional, not instant/glitchy
+  const generated = composeProductDescription(row);
+  btn.innerHTML = original;
+  btn.disabled = false;
+  const existing = (row.values[cIdx] || '').trim();
+  if(existing && !confirm('This will replace the current English description with a newly generated one. Continue?')) return;
+  mutateWithHistory('Generated product description', ()=>{
+    row.values[cIdx] = generated;
+    stampEdit(row);
+  });
+  if(onDone) onDone();
+}
+
 function stampEdit(row){
   row.lastEditedAt = Date.now();
   row.lastEditedBy = currentUser || 'Unassigned';
@@ -1328,27 +1487,6 @@ function loadState(){
 }
 
 /* ========================================================================
-   SKU GENERATOR
-   ======================================================================== */
-function codeFromString(s){
-  if(!s) return '';
-  const letters = s.toString().replace(/[^A-Za-z]/g,'').toUpperCase();
-  return letters.slice(0,3);
-}
-function generateSKU(row){
-  const existing = row.values[IDX["SKU"]];
-  if(existing && existing.trim()){
-    if(!confirm('This product already has a SKU. Overwrite with a generated one?')) return;
-  }
-  const catCode = codeFromString(row.values[IDX["Main Category"]]) || 'GEN';
-  const subCode = codeFromString(row.values[IDX["Subcategory"]]) || 'PRD';
-  skuCounter++;
-  scheduleConfigSave();
-  const sku = `${catCode}-${subCode}-${String(skuCounter).padStart(6,'0')}`;
-  mutateWithHistory(`Generated SKU ${sku}`, ()=>{ row.values[IDX["SKU"]] = sku; stampEdit(row); });
-}
-
-/* ========================================================================
    HEADER
    ======================================================================== */
 function buildHead(){
@@ -1374,7 +1512,8 @@ function buildHead(){
         <div class="img-size-menu" id="imgSizeMenu"></div>
       </div>`;
     } else {
-      th.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '');
+      const unitHtml = f.headerUnit ? `<span class="th-unit">${f.headerUnit}</span>` : '';
+      th.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '') + unitHtml;
     }
     fieldRow.appendChild(th);
   });
@@ -1618,24 +1757,19 @@ function renderBody(){
           addCategoryIfNew(row.values[cIdx]);
           if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
           if(IDX["Material"]>-1) row.values[IDX["Material"]] = "";
-          renderBody();
+          renderBody(); // full rebuild needed: Subcategory/Material options and disabled-field state depend on category
         } else {
-          renderBody();
+          // Lightweight refresh only — never recreates input elements, so whichever
+          // cell the user clicks into next keeps its focus and keystrokes correctly.
+          updateStats();
+          applyFilters();
+          refreshAllRowIndicators();
         }
       });
 
       let cellContent = el;
 
-      if(f.name === "SKU"){
-        const wrap = document.createElement('div'); wrap.className = 'sku-wrap';
-        wrap.appendChild(el);
-        const genBtn = document.createElement('button');
-        genBtn.type='button'; genBtn.className='sku-gen'; genBtn.title='Generate SKU';
-        genBtn.textContent = '⚡';
-        genBtn.addEventListener('click', ()=> generateSKU(row));
-        wrap.appendChild(genBtn);
-        cellContent = wrap;
-      } else if(!disabled && f.type === "number" && (f.unit || f.dynamicUnit)){
+      if(!disabled && f.type === "number" && (f.unit || f.dynamicUnit)){
         const unitText = f.unit ? f.unit : (category === "Drinkware" ? "ml" : "");
         if(unitText){
           const wrap = document.createElement('div'); wrap.className = 'unit-wrap';
@@ -1644,6 +1778,33 @@ function renderBody(){
           wrap.appendChild(unitSpan);
           cellContent = wrap;
         }
+      } else if(!disabled && f.rtl){
+        const wrap = document.createElement('div'); wrap.className = 'translate-wrap';
+        wrap.appendChild(el);
+        const tBtn = document.createElement('button');
+        tBtn.type = 'button'; tBtn.className = 'translate-btn';
+        const sourceFieldName = f.name.replace(' AR', ' EN');
+        tBtn.title = `Auto-translate from ${sourceFieldName}`;
+        tBtn.innerHTML = TRANSLATE_ICON;
+        tBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          handleTranslateClick(tBtn, row, cIdx, sourceFieldName);
+        });
+        wrap.appendChild(tBtn);
+        cellContent = wrap;
+      } else if(!disabled && f.name === "Description EN"){
+        const wrap = document.createElement('div'); wrap.className = 'translate-wrap';
+        wrap.appendChild(el);
+        const gBtn = document.createElement('button');
+        gBtn.type = 'button'; gBtn.className = 'translate-btn';
+        gBtn.title = 'Generate a description from this product\'s other fields';
+        gBtn.innerHTML = GENERATE_ICON;
+        gBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          handleGenerateDescriptionClick(gBtn, row, cIdx);
+        });
+        wrap.appendChild(gBtn);
+        cellContent = wrap;
       }
 
       td.appendChild(cellContent);
@@ -1738,6 +1899,66 @@ function updateBulkBar(){
   else bar.classList.remove('show');
 }
 
+/* ---- Lightweight indicator refresh — updates status dots / highlight
+   classes on existing DOM without recreating any input/select element.
+   Critical: recreating elements mid-edit (the old renderBody()/
+   renderFocusedMode() approach) destroys whichever field the user is
+   about to click into next, silently dropping their focus (and, if they
+   were already typing there, their keystrokes land nowhere). This never
+   touches an input the user might be interacting with. ---- */
+function refreshAllRowIndicators(){
+  const dupeInfo = getDupeSets();
+  rows.forEach((row, rIdx) => {
+    const tr = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`);
+    if(!tr) return;
+    const status = computeStatus(row);
+    const pct = rowCompletionPct(row);
+    const rowStarted = rowHasAnyValue(row);
+    const category = row.values[IDX["Main Category"]];
+    const dot = tr.querySelector('.status-dot');
+    if(dot){ dot.className = 'status-dot ' + statusClass(status); dot.title = `${status} · ${pct}% complete`; }
+    flatFields.forEach((f, cIdx) => {
+      if(f.type === 'image') return;
+      const td = tr.children[cIdx+1];
+      if(!td) return;
+      const disabled = isNotApplicable(category, f.name);
+      const isEmptyRequired = f.required && !disabled && rowStarted && (!row.values[cIdx] || !row.values[cIdx].toString().trim());
+      td.classList.toggle('required-empty', !!isEmptyRequired);
+      let isDup = false;
+      if(f.dupeCheck){
+        const val = (row.values[cIdx]||"").trim().toLowerCase();
+        const counts = f.name==="SKU" ? dupeInfo.skuCounts : dupeInfo.barcodeCounts;
+        isDup = !!(val && counts[val] > 1);
+      }
+      td.classList.toggle('duplicate-val', isDup);
+      td.classList.toggle('invalid-value', !disabled && isFieldInvalid(f, row.values[cIdx]));
+    });
+  });
+}
+function refreshFocusedHeader(){
+  const row = rows[focusedRowIdx];
+  if(!row) return;
+  const status = computeStatus(row);
+  const pct = rowCompletionPct(row);
+  const titleEl = document.querySelector('.fh-title');
+  if(titleEl) titleEl.textContent = row.values[IDX["Product Name EN"]] || 'Untitled product';
+  const pillEl = document.querySelector('.focused-status-pill');
+  if(pillEl) pillEl.textContent = `${status} · ${pct}%`;
+  const saveEl = document.getElementById('focusedSaveStatus');
+  if(saveEl) saveEl.textContent = document.getElementById('saveStatus').textContent;
+  const stepper = document.getElementById('focusedStepper');
+  if(stepper){
+    stepper.innerHTML = '';
+    FOCUSED_STEPS.forEach(step=>{
+      const btn = document.createElement('button');
+      btn.className = 'step-btn' + (step.key===focusedStep ? ' active' : '');
+      const incomplete = step.section && stepHasMissing(row, step.section);
+      btn.innerHTML = step.label + (incomplete ? '<span class="step-flag">●</span>' : '');
+      btn.onclick = ()=> selectFocusedStep(step.key);
+      stepper.appendChild(btn);
+    });
+  }
+}
 function updateStats(){
   const dupeInfo = getDupeSets();
   document.getElementById('statRows').textContent = rows.length;
@@ -2299,7 +2520,7 @@ function buildFocusedField(f, row, cIdx){
   const disabled = isNotApplicable(category, f.name);
 
   const label = document.createElement('label');
-  label.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '') + (disabled ? ' (not applicable)' : '');
+  label.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '') + (f.headerUnit ? `<span class="th-unit">${f.headerUnit}</span>` : '') + (disabled ? ' (not applicable)' : '');
   wrap.appendChild(label);
 
   let el;
@@ -2336,6 +2557,7 @@ function buildFocusedField(f, row, cIdx){
 
   el.addEventListener('focus', () => { preEditSnapshot = cloneRows(); markRowEditing(row.id); });
   el.addEventListener('blur', () => scheduleReleaseEditing(row.id));
+  el.addEventListener('input', e => { row.values[cIdx] = e.target.value; });
   el.addEventListener('change', e => {
     row.values[cIdx] = e.target.value;
     stampEdit(row);
@@ -2348,22 +2570,34 @@ function buildFocusedField(f, row, cIdx){
       addCategoryIfNew(row.values[cIdx]);
       if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
       if(IDX["Material"]>-1) row.values[IDX["Material"]] = "";
+      renderFocusedMode(); // full rebuild needed: Subcategory/Material options depend on category
+    } else {
+      // Lightweight refresh only — never recreates this step's input elements,
+      // so whichever field the user clicks into next keeps focus correctly.
+      refreshFocusedHeader();
     }
-    renderFocusedMode();
   });
 
   wrap.appendChild(el);
 
-  if(f.name === "SKU"){
-    const genBtn = document.createElement('button');
-    genBtn.className = 'btn-ghost'; genBtn.style.marginLeft='8px'; genBtn.type='button';
-    genBtn.textContent = '⚡ Generate';
-    genBtn.onclick = ()=> { generateSKU(row); renderFocusedMode(); };
-    wrap.appendChild(genBtn);
-  }
   if(!disabled && f.type==='number' && (f.unit || f.dynamicUnit)){
     const unitText = f.unit ? f.unit : (category === "Drinkware" ? "ml" : "");
     if(unitText){ const span = document.createElement('span'); span.className='f-unit'; span.textContent=unitText; wrap.appendChild(span); }
+  }
+  if(!disabled && f.rtl){
+    const sourceFieldName = f.name.replace(' AR', ' EN');
+    const tBtn = document.createElement('button');
+    tBtn.type = 'button'; tBtn.className = 'f-translate-btn';
+    tBtn.innerHTML = TRANSLATE_ICON + `<span>Translate from ${sourceFieldName}</span>`;
+    tBtn.addEventListener('click', () => handleTranslateClick(tBtn, row, cIdx, sourceFieldName, renderFocusedMode));
+    wrap.appendChild(tBtn);
+  }
+  if(!disabled && f.name === "Description EN"){
+    const gBtn = document.createElement('button');
+    gBtn.type = 'button'; gBtn.className = 'f-translate-btn';
+    gBtn.innerHTML = GENERATE_ICON + `<span>Generate from other fields</span>`;
+    gBtn.addEventListener('click', () => handleGenerateDescriptionClick(gBtn, row, cIdx, renderFocusedMode));
+    wrap.appendChild(gBtn);
   }
   if(!disabled && isFieldInvalid(f, row.values[cIdx])){
     const note = document.createElement('div'); note.className='field-note';
