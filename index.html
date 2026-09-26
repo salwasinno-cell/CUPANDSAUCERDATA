@@ -489,6 +489,12 @@
   .focused-field .combo-wrap.f-combo input.f-input{border:none;max-width:none;flex:1;}
   .focused-field .combo-wrap.f-combo .combo-arrow{height:auto;border-radius:0;}
   .focused-field .combo-wrap.f-combo:focus-within{border-color:var(--brass);}
+  /* focused / phone view */
+  .focused-field textarea.f-input{width:100%;max-width:420px;padding:11px 14px;font-family:inherit;font-size:13.5px;line-height:1.5;border:1px solid var(--hairline-strong);background:var(--white);resize:none;overflow:hidden;display:block;min-height:44px;}
+  .focused-field textarea.f-input:focus{outline:none;border-color:var(--brass);background:var(--brass-light);}
+  .f-img-remove{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.95);color:var(--danger);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,0.18);}
+  .f-img-remove:hover{background:var(--danger);color:var(--white);border-color:var(--danger);}
+  @media (max-width:860px){ .focused-field textarea.f-input{max-width:100%;font-size:16px;padding:12px 14px;} }
 </style>
 </head>
 <body>
@@ -941,6 +947,29 @@ function toProductRecord(row){
     history: (row.history || []).slice(-20)
   };
 }
+/* ---- Live save: text is saved ~0.7s after you stop typing (not only when you
+   leave the field), and anything pending is flushed if the page is closed,
+   hidden, or the phone switches apps. ---- */
+const liveSaveTimers = {};
+const liveSaveRows = {};
+function liveSave(row){
+  liveSaveRows[row.id] = row;
+  clearTimeout(liveSaveTimers[row.id]);
+  setSaveStatus('Saving…');
+  liveSaveTimers[row.id] = setTimeout(()=>flushLiveSave(row.id), 700);
+}
+function flushLiveSave(id){
+  clearTimeout(liveSaveTimers[id]); delete liveSaveTimers[id];
+  const row = liveSaveRows[id]; delete liveSaveRows[id];
+  if(!row) return;
+  stampEdit(row);
+  persistRow(row);
+  scheduleAutosave();
+}
+function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); try{ doAutosave(); }catch(e){} }
+window.addEventListener('pagehide', flushAllLiveSaves);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'hidden') flushAllLiveSaves(); });
+
 function persistRow(row){
   setSaveStatus('Saving…');
   enqueueWrite(row.id, async ()=>{
@@ -1710,6 +1739,8 @@ function renderHistory(){
 function setSaveStatus(text){
   const el = document.getElementById('saveStatus');
   if(el) el.textContent = text;
+  const fe = document.getElementById('focusedSaveStatus');
+  if(fe) fe.textContent = text;
 }
 function scheduleAutosave(){
   clearTimeout(autosaveTimer);
@@ -1884,7 +1915,7 @@ function autoGrow(el){
   el.style.height = Math.max(36, el.scrollHeight) + 'px';
 }
 function autoGrowAll(root){
-  (root || document).querySelectorAll('textarea.cell').forEach(autoGrow);
+  (root || document).querySelectorAll('textarea.cell, textarea.f-textarea').forEach(autoGrow);
 }
 let _growRaf = null;
 window.addEventListener('resize', () => { cancelAnimationFrame(_growRaf); _growRaf = requestAnimationFrame(()=>autoGrowAll()); });
@@ -2187,9 +2218,10 @@ function renderBody(){
         if(rangeSelection){ rangeSelection = null; document.querySelectorAll('.range-selected').forEach(td=>td.classList.remove('range-selected')); }
       });
       el.addEventListener('blur', () => scheduleReleaseEditing(row.id));
-      el.addEventListener('input', e => { row.values[cIdx] = e.target.value; });
+      el.addEventListener('input', e => { if(!e.isTrusted) return; row.values[cIdx] = e.target.value; liveSave(row); });
       el.addEventListener('keydown', e => handleCellKeydown(e, rIdx, f, cIdx));
       el.addEventListener('change', e => {
+        clearTimeout(liveSaveTimers[row.id]); delete liveSaveTimers[row.id]; delete liveSaveRows[row.id];
         row.values[cIdx] = e.target.value;
         stampEdit(row);
         persistRow(row);
@@ -2955,6 +2987,7 @@ function renderFocusedMode(){
   } else {
     renderFocusedFieldsForSection(content, row, stepDef.section, false);
   }
+  requestAnimationFrame(()=>autoGrowAll(content));
 }
 
 function stepHasMissing(row, sectionName){
@@ -3011,6 +3044,14 @@ function buildFocusedField(f, row, cIdx){
     el._comboOptions = () => options;
     el.placeholder = 'Select or type…';
     el.value = row.values[cIdx] || '';
+  } else if(MULTILINE_FIELDS[f.name]){
+    el = document.createElement('textarea');
+    el.className = 'f-input f-textarea';
+    el.rows = 1;
+    el.placeholder = FIELD_PLACEHOLDERS[f.name] || '';
+    el.value = row.values[cIdx] || '';
+    if(f.rtl) el.classList.add('rtl-field');
+    el.addEventListener('input', () => autoGrow(el));
   } else {
     el = document.createElement('input');
     el.className = 'f-input';
@@ -3024,8 +3065,9 @@ function buildFocusedField(f, row, cIdx){
 
   el.addEventListener('focus', () => { preEditSnapshot = cloneRows(); markRowEditing(row.id); });
   el.addEventListener('blur', () => scheduleReleaseEditing(row.id));
-  el.addEventListener('input', e => { row.values[cIdx] = e.target.value; });
+  el.addEventListener('input', e => { if(!e.isTrusted) return; row.values[cIdx] = e.target.value; liveSave(row); });
   el.addEventListener('change', e => {
+    clearTimeout(liveSaveTimers[row.id]); delete liveSaveTimers[row.id]; delete liveSaveRows[row.id];
     row.values[cIdx] = e.target.value;
     stampEdit(row);
     persistRow(row);
@@ -3090,7 +3132,7 @@ function buildFocusedImageField(f, row, cIdx){
   wrap.appendChild(label);
 
   const box = document.createElement('div');
-  box.style.cssText = 'width:220px;height:220px;border:1.5px dashed var(--hairline-strong);background:var(--white);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;';
+  box.style.cssText = 'position:relative;width:220px;height:220px;border:1.5px dashed var(--hairline-strong);background:var(--white);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;';
   const imgUrl = row.values[cIdx];
   box.innerHTML = imgUrl ? `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;">` : UPLOAD_ICON;
 
@@ -3115,15 +3157,18 @@ function buildFocusedImageField(f, row, cIdx){
   wrap.appendChild(box);
   wrap.appendChild(fileInput);
 
-  const nameLine = document.createElement('div');
-  nameLine.style.cssText = 'font-size:11.5px;color:var(--ink-soft);margin-top:8px;';
-  nameLine.textContent = imgUrl ? 'Image uploaded' : 'No image uploaded';
-  wrap.appendChild(nameLine);
+  if(!imgUrl){
+    const nameLine = document.createElement('div');
+    nameLine.style.cssText = 'font-size:11.5px;color:var(--ink-soft);margin-top:8px;';
+    nameLine.textContent = 'Tap to upload a photo';
+    wrap.appendChild(nameLine);
+  }
 
   if(imgUrl){
     const rmBtn = document.createElement('button');
-    rmBtn.className = 'btn-ghost'; rmBtn.style.marginTop='8px'; rmBtn.textContent = 'Remove image';
-    rmBtn.onclick = ()=>{
+    rmBtn.type = 'button'; rmBtn.className = 'f-img-remove'; rmBtn.title = 'Remove image'; rmBtn.textContent = '✕';
+    rmBtn.onclick = (ev)=>{
+      ev.stopPropagation();
       const oldUrl = row.values[cIdx];
       mutateWithHistory(`Row ${focusedRowIdx+1}: image removed`, ()=>{
         row.values[cIdx] = '';
@@ -3132,7 +3177,7 @@ function buildFocusedImageField(f, row, cIdx){
       deleteProductImageByUrl(oldUrl);
       renderFocusedMode();
     };
-    wrap.appendChild(rmBtn);
+    box.appendChild(rmBtn);
   }
   return wrap;
 }
