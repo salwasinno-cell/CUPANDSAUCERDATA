@@ -471,8 +471,8 @@
   td.duplicate-val .cellbox{background:#FBF1EF;border-color:var(--danger);}
   td.invalid-value .cellbox{background:var(--warn-light);border-color:#E3C38C;}
   td.disabled-field .cellbox{background:transparent;border-style:dashed;border-color:var(--hairline);}
-  td.disabled-field .cellbox input.cell, td.disabled-field .cellbox select.cell{color:#C2C0B4;background-image:none !important;}
-  td.disabled-field .cellbox input.cell::placeholder{color:#C9C6B9;font-style:italic;}
+  td.disabled-field .cellbox input.cell, td.disabled-field .cellbox select.cell, td.disabled-field .cellbox textarea.cell{color:#C2C0B4;background-image:none !important;}
+  td.disabled-field .cellbox input.cell::placeholder, td.disabled-field .cellbox textarea.cell::placeholder{color:#C9C6B9;font-style:italic;}
   .fill-handle{right:4px;bottom:4px;border-radius:2px;}
 
   /* dropdown menu */
@@ -764,7 +764,7 @@ if(SUPABASE_NOT_CONFIGURED){
 /* ========================================================================
    SCHEMA
    ======================================================================== */
-const CATALOG_VERSION = 2; // bump when the default catalog below changes, so saved configs pick it up once
+const CATALOG_VERSION = 3; // bump when the default catalog below changes, so saved configs pick it up once
 const CATEGORY_SUBCATS = {
   "Tableware": ["Dinner Sets","Plates","Bowls","Flatware","Serveware","Dessert","Platters","Salad & Pasta","Condiments & Dips"],
   "Drinkware": ["Coffee","Tea","Cups","Mugs","Containers","Pots","Carafes"],
@@ -782,35 +782,27 @@ const CATEGORY_SUBCATS = {
 const MAIN_CATEGORIES = Object.keys(CATEGORY_SUBCATS);
 let dynamicCategories = MAIN_CATEGORIES.slice();
 
-const MATERIALS_DEFAULT = ["Glass","Ceramic","Porcelain","Stainless Steel","Wood","Cotton","Linen","Melamine","Silicone","Plastic"];
+const MATERIALS_DEFAULT = ["Glass","Crystal","Ceramic","Porcelain","Stainless Steel","Wood","Cotton","Linen","Melamine","Silicone","Plastic"];
 const MATERIALS_BY_CATEGORY = {
-  "Tableware": ["Porcelain","Ceramic","Stoneware","Bone China","Melamine","Glass","Stainless Steel","Wood"],
+  "Tableware": ["Porcelain","Ceramic","Stoneware","Bone China","Melamine","Glass","Stainless Steel","Wood","Crystal"],
   "Drinkware": ["Glass","Crystal","Borosilicate Glass","Ceramic","Porcelain","Stainless Steel","Acrylic","Copper"],
-  "Lighting": ["Glass","Metal","Brass","Ceramic","Wood","Rattan","Fabric","Wax"],
-  "Trays": ["Wood","Metal","Brass","Marble","Glass","Acrylic","Resin","Rattan","Mirror"],
+  "Lighting": ["Glass","Metal","Brass","Ceramic","Wood","Rattan","Fabric","Wax","Crystal"],
+  "Trays": ["Wood","Metal","Brass","Marble","Glass","Acrylic","Resin","Rattan","Mirror","Crystal"],
   "Cookware": ["Stainless Steel","Cast Iron","Enameled Cast Iron","Non-Stick Aluminum","Copper","Ceramic","Glass"],
-  "Bathroom": ["Ceramic","Glass","Stainless Steel","Resin","Marble","Bamboo","Cotton"],
-  "Greenery": ["Artificial Foliage","Dried Botanicals","Ceramic","Glass","Terracotta","Concrete","Metal"],
-  "Kitchen Essentials": ["Glass","Stainless Steel","Wood","Bamboo","Acacia Wood","Ceramic","Silicone","Marble","Cotton"],
+  "Bathroom": ["Ceramic","Glass","Stainless Steel","Resin","Marble","Bamboo","Cotton","Crystal"],
+  "Greenery": ["Artificial Foliage","Dried Botanicals","Ceramic","Glass","Terracotta","Concrete","Metal","Crystal"],
+  "Kitchen Essentials": ["Glass","Stainless Steel","Wood","Bamboo","Acacia Wood","Ceramic","Silicone","Marble","Cotton","Crystal"],
   "Home Textiles": ["Cotton","Linen","Velvet","Wool","Jute","Polyester","Blend"],
-  "Decor & Accessories": ["Ceramic","Glass","Metal","Brass","Resin","Marble","Wood","Stone","Concrete"],
+  "Decor & Accessories": ["Ceramic","Glass","Metal","Brass","Resin","Marble","Wood","Stone","Concrete","Crystal"],
   "Storage & Organization": ["Rattan","Seagrass","Wood","Metal","Glass","Fabric","Acrylic"],
-  "Gift Sets": ["Porcelain","Glass","Ceramic","Stainless Steel","Mixed Materials"]
+  "Gift Sets": ["Porcelain","Glass","Ceramic","Stainless Steel","Mixed Materials","Crystal"]
 };
 
 const COLORS = ["White","Ivory","Burgundy","Gold","Silver","Black","Navy","Green","Terracotta","Transparent","Multicolor"];
 const REVIEW_STATUSES = ["Draft","In Review","Approved","Published"];
 const STOCK_STATUSES = ["Out of Stock","Low Stock","In Stock"];
 
-const NOT_APPLICABLE = {
-  "Tableware": ["Capacity"],
-  "Drinkware": ["Pieces Number","Suitable For / Persons","Included Pieces"],
-  "Lighting": ["Capacity","Suitable For / Persons"],
-  "Trays": ["Capacity","Suitable For / Persons"],
-  "Greenery": ["Suitable For / Persons"],
-  "Home Textiles": ["Capacity","Depth"],
-  "Decor & Accessories": ["Suitable For / Persons"]
-};
+const NOT_APPLICABLE = {}; // no fields are blocked for any category — every field is always editable
 const CAPACITY_ML_CATEGORIES = ["Drinkware","Cookware","Kitchen Essentials"];
 
 const schema = [
@@ -1026,8 +1018,9 @@ async function persistConfig(){
 }
 function applyConfig(data){
   if(!data) return;
-  const needsCatalogUpgrade = (data.catalogVersion||1) < CATALOG_VERSION;
-  if(needsCatalogUpgrade){
+  const savedVersion = data.catalogVersion||1;
+  const needsCatalogUpgrade = savedVersion < CATALOG_VERSION;
+  if(savedVersion < 2){
     // Keep anything staff added themselves, but bring in the new full catalog once.
     // "Home & Living" was an old umbrella category — its items are now main categories.
     const unionInto = (target, extra) => { (extra||[]).forEach(v=>{ if(!target.some(x=>x.toLowerCase()===String(v).toLowerCase())) target.push(v); }); };
@@ -1042,6 +1035,13 @@ function applyConfig(data){
     if(data.categorySubcatsOverride) Object.assign(CATEGORY_SUBCATS, data.categorySubcatsOverride);
     if(data.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, data.materialsOverride);
     if(data.dynamicCategories) dynamicCategories = data.dynamicCategories;
+  }
+  if(savedVersion < 3){
+    // v3: Crystal added as a material wherever it fits (keeps every other staff edit)
+    ["Tableware","Drinkware","Lighting","Trays","Bathroom","Greenery","Kitchen Essentials","Decor & Accessories","Gift Sets"].forEach(cat=>{
+      if(!MATERIALS_BY_CATEGORY[cat]) return;
+      if(!MATERIALS_BY_CATEGORY[cat].some(m=>m.toLowerCase()==='crystal')) MATERIALS_BY_CATEGORY[cat].push('Crystal');
+    });
   }
   if(data.dynamicStaff) dynamicStaff = data.dynamicStaff;
   if(Array.isArray(data.dynamicCollections)) dynamicCollections = data.dynamicCollections;
@@ -1762,7 +1762,7 @@ function loadState(){
     const raw = localStorage.getItem('cs_pde_state_v1');
     if(!raw) return false;
     const payload = JSON.parse(raw);
-    if((payload.catalogVersion||1) < CATALOG_VERSION){ delete payload.categorySubcatsOverride; delete payload.materialsOverride; delete payload.dynamicCategories; }
+    if((payload.catalogVersion||1) < 2){ delete payload.categorySubcatsOverride; delete payload.materialsOverride; delete payload.dynamicCategories; }
     if(payload.categorySubcatsOverride) Object.assign(CATEGORY_SUBCATS, payload.categorySubcatsOverride);
     if(payload.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, payload.materialsOverride);
     if(payload.dynamicCategories) dynamicCategories = payload.dynamicCategories;
@@ -2191,7 +2191,7 @@ function renderBody(){
         el = document.createElement('textarea');
         el.className = 'cell ' + MULTILINE_FIELDS[f.name];
         el.rows = 1;
-        el.placeholder = FIELD_PLACEHOLDERS[f.name] || f.name;
+        el.placeholder = disabled ? "Not applicable" : (FIELD_PLACEHOLDERS[f.name] || f.name);
         el.value = row.values[cIdx] || "";
         if(f.rtl) el.classList.add('rtl-field');
         el.addEventListener('input', () => autoGrow(el));
