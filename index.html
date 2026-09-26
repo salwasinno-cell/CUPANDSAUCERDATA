@@ -96,7 +96,7 @@
   thead tr.field th.rowno-head{left:0;z-index:4;background:var(--ivory-2);border-right:1px solid var(--hairline-strong);}
   tbody td{border-right:1px solid var(--hairline);border-bottom:1px solid var(--hairline);padding:0;background:var(--white);position:relative;}
   tbody tr:nth-child(even) td{background:#FCFBF8;}
-  tbody tr:hover td{background:var(--brass-light) !important;opacity:1;}
+  tbody tr:hover td{background-color:#FBF6EA !important;}
   tbody tr.hidden-row{display:none;}
   tbody tr.selected-row td{background:#F3EBD3 !important;}
 
@@ -154,13 +154,13 @@
   .f-translate-btn:disabled{opacity:0.5;cursor:wait;}
   .f-translate-btn svg{width:14px;height:14px;}
 
-  .image-cell{position:relative;display:inline-flex;align-items:center;padding:10px 12px;}
+  .image-cell{position:relative;display:inline-flex;align-items:center;padding:0;}
   .img-thumb{width:var(--thumb-size);height:var(--thumb-size);flex-shrink:0;border-radius:6px;border:1.5px dashed var(--hairline-strong);background:var(--ivory-2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;padding:0;transition:width 0.15s ease, height 0.15s ease;}
   .img-thumb:hover{border-color:var(--brass);background:var(--brass-light);}
   .img-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .img-thumb svg{width:22px;height:22px;}
   .img-name{font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;}
-  .img-remove{position:absolute;top:4px;left:calc(12px + var(--thumb-size) - 12px);width:18px;height:18px;border-radius:50%;border:1px solid var(--hairline-strong);background:var(--white);color:var(--danger);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,0.15);z-index:2;}
+  .img-remove{position:absolute;top:-6px;left:calc(var(--thumb-size) - 13px);width:18px;height:18px;border-radius:50%;border:1px solid var(--hairline-strong);background:var(--white);color:var(--danger);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,0.15);z-index:2;}
   .img-remove:hover{background:var(--danger);color:var(--white);border-color:var(--danger);}
 
   /* ---------- Image size control (header icon + popover) ---------- */
@@ -429,6 +429,66 @@
     .focused-content{padding:20px 16px 100px;max-width:100%;}
     .focused-field input.f-input, .focused-field select.f-input{max-width:100%;font-size:16px;padding:12px 14px;}
   }
+
+  /* =====================================================================
+     FIELD SYSTEM — one consistent look for every editable cell
+     ===================================================================== */
+  tbody td{vertical-align:top;padding:9px 8px;}
+  tbody td:has(.image-cell){padding:9px 12px;}
+  thead tr.field th{vertical-align:bottom;padding:10px 10px;}
+  .cellbox{position:relative;display:flex;align-items:stretch;min-height:36px;background:#FDFCF9;border:1px solid var(--hairline);border-radius:6px;transition:border-color .15s ease, box-shadow .15s ease, background-color .15s ease;}
+  .cellbox:hover{border-color:var(--hairline-strong);}
+  .cellbox:focus-within{border-color:var(--brass);background:var(--white);box-shadow:0 0 0 3px rgba(199,167,100,0.18);}
+  .cellbox > .translate-wrap, .cellbox > .unit-wrap, .cellbox > .combo-wrap{display:flex;align-items:flex-start;width:100%;min-width:0;}
+  .cellbox input.cell, .cellbox select.cell, .cellbox textarea.cell{
+    flex:1 1 auto;width:100%;min-width:0 !important;height:34px;margin:0;
+    border:none !important;border-radius:6px;background-color:transparent !important;background-image:none;
+    padding:0 11px;font-size:13px;line-height:34px;color:var(--ink);
+  }
+  .cellbox textarea.cell{height:auto;min-height:34px;line-height:1.45;padding:8px 11px;}
+  .cellbox textarea.cell:placeholder-shown, .cellbox input.cell:placeholder-shown{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cellbox input.cell::placeholder, .cellbox textarea.cell::placeholder{color:#B9B6A8;font-weight:400;}
+  .cellbox-number input.cell{font-variant-numeric:tabular-nums;}
+  .cellbox .rtl-field{direction:rtl;text-align:right;font-size:13.5px;}
+  .cellbox select.cell{cursor:pointer;padding-right:34px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23B08F52' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E") !important;
+    background-repeat:no-repeat;background-position:right 11px center;background-size:12px 12px;}
+
+  /* icon slot (translate / generate / dropdown arrow / unit) — always top-right, same size */
+  .cellbox .translate-btn, .combo-arrow{flex:0 0 34px;width:34px;height:34px;padding:0;margin:0;display:flex;align-items:center;justify-content:center;border:none;border-left:1px solid var(--hairline);background:transparent;color:var(--brass-dim);cursor:pointer;border-radius:0 6px 6px 0;}
+  .cellbox .translate-btn:hover, .combo-arrow:hover{background:var(--brass-light);color:var(--ink);}
+  .cellbox .translate-btn svg{width:15px;height:15px;}
+  .combo-arrow svg{width:12px;height:12px;transition:transform .15s ease;}
+  .combo-arrow.open svg{transform:rotate(180deg);}
+  .combo-wrap.is-disabled .combo-arrow{display:none;}
+  .cellbox .combo-wrap input.cell.combo{cursor:text;}
+  .cellbox input.cell.combo::-webkit-calendar-picker-indicator{display:none !important;}
+  .cellbox .unit-suffix{flex:0 0 auto;height:34px;display:flex;align-items:center;padding:0 10px;font-size:11px;color:var(--ink-soft);border-left:1px solid var(--hairline);background:var(--ivory-2);border-radius:0 6px 6px 0;}
+
+  /* states — tint the whole box, not just part of it */
+  td.required-empty .cellbox{background:#FBF1EF;border-color:#EBCFC9;}
+  td.required-empty .cellbox:focus-within{background:var(--white);border-color:var(--brass);}
+  td.duplicate-val .cellbox{background:#FBF1EF;border-color:var(--danger);}
+  td.invalid-value .cellbox{background:var(--warn-light);border-color:#E3C38C;}
+  td.disabled-field .cellbox{background:transparent;border-style:dashed;border-color:var(--hairline);}
+  td.disabled-field .cellbox input.cell, td.disabled-field .cellbox select.cell{color:#C2C0B4;background-image:none !important;}
+  td.disabled-field .cellbox input.cell::placeholder{color:#C9C6B9;font-style:italic;}
+  .fill-handle{right:4px;bottom:4px;border-radius:2px;}
+
+  /* dropdown menu */
+  .combo-menu{position:fixed;z-index:500;display:none;max-height:280px;overflow-y:auto;background:var(--white);border:1px solid var(--hairline-strong);border-radius:8px;box-shadow:0 12px 32px rgba(27,28,31,0.16), 0 2px 6px rgba(27,28,31,0.06);padding:5px;font-size:13px;}
+  .combo-menu.show{display:block;}
+  .combo-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 11px;border-radius:5px;cursor:pointer;color:var(--ink);white-space:nowrap;}
+  .combo-opt.active{background:var(--brass-light);}
+  .combo-opt.selected{font-weight:600;}
+  .combo-opt b{color:var(--brass-dim);font-weight:600;}
+  .combo-empty{padding:10px 12px;color:var(--ink-soft);font-size:12px;}
+
+  /* focused mode uses the same dropdown */
+  .focused-field .combo-wrap.f-combo{display:flex;align-items:stretch;max-width:420px;border:1px solid var(--hairline-strong);background:var(--white);}
+  .focused-field .combo-wrap.f-combo input.f-input{border:none;max-width:none;flex:1;}
+  .focused-field .combo-wrap.f-combo .combo-arrow{height:auto;border-radius:0;}
+  .focused-field .combo-wrap.f-combo:focus-within{border-color:var(--brass);}
 </style>
 </head>
 <body>
@@ -511,6 +571,10 @@
   <div class="filter-field">
     <label>Subcategory</label>
     <select id="fSubcategory" onchange="applyFilters()"><option value="">All</option></select>
+  </div>
+  <div class="filter-field">
+    <label>Collection</label>
+    <select id="fCollection" onchange="applyFilters()"><option value="">All</option></select>
   </div>
   <div class="filter-field">
     <label>Brand</label>
@@ -694,19 +758,38 @@ if(SUPABASE_NOT_CONFIGURED){
 /* ========================================================================
    SCHEMA
    ======================================================================== */
+const CATALOG_VERSION = 2; // bump when the default catalog below changes, so saved configs pick it up once
 const CATEGORY_SUBCATS = {
-  "Tableware": ["Plates","Bowls","Flatware","Dessert"],
-  "Drinkware": ["Coffee","Tea","Containers","Cups","Carafe"],
-  "Home & Living": ["Lighting","Décor & Accessories","Home Textiles","Trays","Cookware","Greenery","Bathroom"]
+  "Tableware": ["Dinner Sets","Plates","Bowls","Flatware","Serveware","Dessert","Platters","Salad & Pasta","Condiments & Dips"],
+  "Drinkware": ["Coffee","Tea","Cups","Mugs","Containers","Pots","Carafes"],
+  "Lighting": ["Table Lamps","Floor Lamps","Pendant Lights","Wall Lights","Candles","Candle Holders","Lanterns","String Lights"],
+  "Trays": ["Serving Trays","Decorative Trays","Vanity Trays","Breakfast Trays","Ottoman Trays"],
+  "Cookware": ["Pots & Saucepans","Frying Pans","Casseroles","Ovenware & Bakeware","Cast Iron","Kettles","Cooking Utensils"],
+  "Bathroom": ["Soap Dispensers","Bath Accessory Sets","Toothbrush Holders & Tumblers","Bath Mats","Towels","Bathroom Storage"],
+  "Greenery": ["Artificial Plants","Artificial Flowers","Dried Flowers","Planters & Pots","Vases"],
+  "Kitchen Essentials": ["Storage Jars & Canisters","Food Containers","Oil & Vinegar Bottles","Spice Racks","Cutting Boards","Knives","Utensils & Gadgets","Kitchen Linens"],
+  "Home Textiles": ["Tablecloths","Table Runners","Placemats","Napkins","Cushions & Covers","Throws & Blankets","Towels","Bedding"],
+  "Decor & Accessories": ["Vases","Decorative Objects","Sculptures & Figurines","Centerpieces & Decorative Bowls","Picture Frames","Mirrors","Clocks","Home Fragrance"],
+  "Storage & Organization": ["Baskets","Storage Boxes","Organizers","Jars"],
+  "Gift Sets": ["Tableware Gift Sets","Drinkware Gift Sets","Seasonal & Festive"]
 };
 const MAIN_CATEGORIES = Object.keys(CATEGORY_SUBCATS);
 let dynamicCategories = MAIN_CATEGORIES.slice();
 
 const MATERIALS_DEFAULT = ["Glass","Ceramic","Porcelain","Stainless Steel","Wood","Cotton","Linen","Melamine","Silicone","Plastic"];
 const MATERIALS_BY_CATEGORY = {
-  "Tableware": ["Porcelain","Ceramic","Stoneware","Bone China","Melamine","Glass","Stainless Steel"],
-  "Drinkware": ["Glass","Crystal","Ceramic","Stainless Steel","Acrylic","Copper"],
-  "Home & Living": ["Glass","Ceramic","Wood","Metal","Resin","Rattan","Cotton","Linen","Stainless Steel","Cast Iron","Non-Stick Aluminum","Stone","Concrete"]
+  "Tableware": ["Porcelain","Ceramic","Stoneware","Bone China","Melamine","Glass","Stainless Steel","Wood"],
+  "Drinkware": ["Glass","Crystal","Borosilicate Glass","Ceramic","Porcelain","Stainless Steel","Acrylic","Copper"],
+  "Lighting": ["Glass","Metal","Brass","Ceramic","Wood","Rattan","Fabric","Wax"],
+  "Trays": ["Wood","Metal","Brass","Marble","Glass","Acrylic","Resin","Rattan","Mirror"],
+  "Cookware": ["Stainless Steel","Cast Iron","Enameled Cast Iron","Non-Stick Aluminum","Copper","Ceramic","Glass"],
+  "Bathroom": ["Ceramic","Glass","Stainless Steel","Resin","Marble","Bamboo","Cotton"],
+  "Greenery": ["Artificial Foliage","Dried Botanicals","Ceramic","Glass","Terracotta","Concrete","Metal"],
+  "Kitchen Essentials": ["Glass","Stainless Steel","Wood","Bamboo","Acacia Wood","Ceramic","Silicone","Marble","Cotton"],
+  "Home Textiles": ["Cotton","Linen","Velvet","Wool","Jute","Polyester","Blend"],
+  "Decor & Accessories": ["Ceramic","Glass","Metal","Brass","Resin","Marble","Wood","Stone","Concrete"],
+  "Storage & Organization": ["Rattan","Seagrass","Wood","Metal","Glass","Fabric","Acrylic"],
+  "Gift Sets": ["Porcelain","Glass","Ceramic","Stainless Steel","Mixed Materials"]
 };
 
 const COLORS = ["White","Ivory","Burgundy","Gold","Silver","Black","Navy","Green","Terracotta","Transparent","Multicolor"];
@@ -715,8 +798,14 @@ const STOCK_STATUSES = ["Out of Stock","Low Stock","In Stock"];
 
 const NOT_APPLICABLE = {
   "Tableware": ["Capacity"],
-  "Drinkware": ["Pieces Number","Suitable For / Persons","Included Pieces"]
+  "Drinkware": ["Pieces Number","Suitable For / Persons","Included Pieces"],
+  "Lighting": ["Capacity","Suitable For / Persons"],
+  "Trays": ["Capacity","Suitable For / Persons"],
+  "Greenery": ["Suitable For / Persons"],
+  "Home Textiles": ["Capacity","Depth"],
+  "Decor & Accessories": ["Suitable For / Persons"]
 };
+const CAPACITY_ML_CATEGORIES = ["Drinkware","Cookware","Kitchen Essentials"];
 
 const schema = [
   { section: "Identification", fields: [
@@ -730,6 +819,7 @@ const schema = [
   { section: "Classification", fields: [
     { name:"Main Category", type:"combo-category", required:true },
     { name:"Subcategory", type:"combo-sub" },
+    { name:"Collection", type:"combo-collection" },
   ]},
   { section: "Product Details", fields: [
     { name:"Description EN", type:"text", required:true },
@@ -774,6 +864,29 @@ document.getElementById('statFields').textContent = flatFields.length;
 let focusedRowIdx = 0;   // declared early: renderBody() reads it
 let rows = [];              // [{ id, values, createdAt, createdBy, lastEditedAt, lastEditedBy }]
 let dynamicStaff = [];
+let dynamicCollections = ["Signature","Everyday Essentials","Ramadan","Christmas & Holidays","Summer","Gifting"];
+/* All collection names: the managed list + any value already used on a product */
+function allCollections(){
+  const out = dynamicCollections.slice();
+  const ci = IDX["Collection"];
+  rows.forEach(r=>{ const v=(r.values[ci]||'').trim(); if(v && !out.some(x=>x.toLowerCase()===v.toLowerCase())) out.push(v); });
+  return out;
+}
+function addCollectionIfNew(val){
+  const v = (val||"").trim();
+  if(!v) return;
+  if(!dynamicCollections.some(c=>c.toLowerCase()===v.toLowerCase())){ dynamicCollections.push(v); scheduleConfigSave(); }
+}
+/* "Collection" was inserted into the Classification section. Products saved before
+   that have one value fewer, so slot an empty Collection in at the right position
+   instead of letting every later column shift by one. */
+function normalizeRowValues(values){
+  const v = Array.isArray(values) ? values.slice() : [];
+  const ci = IDX["Collection"];
+  if(ci > -1 && v.length === flatFields.length - 1) v.splice(ci, 0, "");
+  while(v.length < flatFields.length) v.push("");
+  return v;
+}
 let currentUser = localStorage.getItem('cs_pde_user') || '';
 let skuCounter = 0;
 
@@ -878,17 +991,33 @@ function scheduleConfigSave(){
   configSaveTimer = setTimeout(persistConfig, 600);
 }
 async function persistConfig(){
-  const data = { dynamicCategories, dynamicStaff, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
+  const data = { catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
   const { error } = await sb.from('app_config').update({ data, updated_at: new Date().toISOString() }).eq('id', 1);
   if(error) console.error('Config sync error', error);
 }
 function applyConfig(data){
   if(!data) return;
-  if(data.categorySubcatsOverride) Object.assign(CATEGORY_SUBCATS, data.categorySubcatsOverride);
-  if(data.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, data.materialsOverride);
-  if(data.dynamicCategories) dynamicCategories = data.dynamicCategories;
+  const needsCatalogUpgrade = (data.catalogVersion||1) < CATALOG_VERSION;
+  if(needsCatalogUpgrade){
+    // Keep anything staff added themselves, but bring in the new full catalog once.
+    // "Home & Living" was an old umbrella category — its items are now main categories.
+    const unionInto = (target, extra) => { (extra||[]).forEach(v=>{ if(!target.some(x=>x.toLowerCase()===String(v).toLowerCase())) target.push(v); }); };
+    const savedSubs = data.categorySubcatsOverride || {};
+    const savedMats = data.materialsOverride || {};
+    Object.keys(savedSubs).forEach(cat=>{ if(cat==='Home & Living') return; CATEGORY_SUBCATS[cat] = CATEGORY_SUBCATS[cat] || []; unionInto(CATEGORY_SUBCATS[cat], savedSubs[cat]); });
+    Object.keys(savedMats).forEach(cat=>{ if(cat==='Home & Living') return; MATERIALS_BY_CATEGORY[cat] = MATERIALS_BY_CATEGORY[cat] || []; unionInto(MATERIALS_BY_CATEGORY[cat], savedMats[cat]); });
+    delete CATEGORY_SUBCATS['Home & Living']; delete MATERIALS_BY_CATEGORY['Home & Living'];
+    dynamicCategories = Object.keys(CATEGORY_SUBCATS);
+    unionInto(dynamicCategories, (data.dynamicCategories||[]).filter(c=>c!=='Home & Living'));
+  } else {
+    if(data.categorySubcatsOverride) Object.assign(CATEGORY_SUBCATS, data.categorySubcatsOverride);
+    if(data.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, data.materialsOverride);
+    if(data.dynamicCategories) dynamicCategories = data.dynamicCategories;
+  }
   if(data.dynamicStaff) dynamicStaff = data.dynamicStaff;
+  if(Array.isArray(data.dynamicCollections)) dynamicCollections = data.dynamicCollections;
   if(typeof data.skuCounter === 'number') skuCounter = Math.max(skuCounter, data.skuCounter);
+  if(needsCatalogUpgrade && typeof sb !== 'undefined' && sb) scheduleConfigSave();
 }
 
 /* ---- Activity log (persisted server-side, shared live across staff) ---- */
@@ -925,7 +1054,7 @@ async function fetchAllData(){
   if(prodErr){ console.error(prodErr); return false; }
   rows = (productRows||[]).map(r => ({
     id: r.id,
-    values: r.values || [],
+    values: normalizeRowValues(r.values),
     createdAt: new Date(r.created_at).getTime(),
     createdBy: r.created_by,
     lastEditedAt: new Date(r.updated_at).getTime(),
@@ -959,7 +1088,7 @@ function applyRemoteRowChange(payload){
   }
   const r = payload.new;
   const incoming = {
-    id: r.id, values: r.values || [],
+    id: r.id, values: normalizeRowValues(r.values),
     createdAt: new Date(r.created_at).getTime(), createdBy: r.created_by,
     lastEditedAt: new Date(r.updated_at).getTime(), lastEditedBy: r.updated_by,
     history: r.history || []
@@ -1004,7 +1133,7 @@ async function initApp(){
 }
 initApp();
 
-const UPLOAD_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#787A70" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
+const UPLOAD_ICON = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#787A70" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
 
 /* ---- Product photo thumbnail size control (personal display preference, this browser only) ---- */
 const GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
@@ -1056,11 +1185,131 @@ applyThumbSize();
    on it working.
    ======================================================================== */
 const TRANSLATE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h9M9 5v3M12 5c-1 4-4 7-8 8"/><path d="M13 21l4-9 4 9M14.5 18h5"/></svg>`;
-async function translateEnglishToArabic(text){
+/* ---- Translation pipeline ----
+   1. Protect things that must NOT be machine-translated: SKUs/codes, the brand,
+      and numbers with units (converted to proper Arabic units instead).
+   2. Lock in Cup & Saucer's own product vocabulary (glossary) so the same
+      English term always becomes the same, retail-appropriate Arabic term.
+   3. Translate sentence-chunks (Google, with MyMemory as automatic backup).
+   4. Restore protected parts and polish: Arabic punctuation, spacing,
+      Latin brand names kept intact.  If anything in the protection step goes
+      wrong, it silently falls back to a plain translation. */
+const AR_GLOSSARY = [
+  // sets & tableware
+  ["dinner set","طقم عشاء"],["dinnerware set","طقم أواني عشاء"],["tea set","طقم شاي"],["coffee set","طقم قهوة"],
+  ["dessert plate","صحن حلويات"],["dessert plates","صحون حلويات"],["dinner plate","صحن عشاء"],["dinner plates","صحون عشاء"],
+  ["side plate","صحن جانبي"],["serving plate","صحن تقديم"],["serving bowl","وعاء تقديم"],["salad bowl","وعاء سلطة"],
+  ["soup bowl","وعاء شوربة"],["cake stand","حامل كيك"],["cake plate","صحن كيك"],["butter dish","صحن زبدة"],
+  ["cheese dome","قبة جبن"],["glass dome","قبة زجاجية"],["cake dome","قبة كيك"],["platter","طبق تقديم"],
+  ["serveware","أواني تقديم"],["flatware","أدوات المائدة"],["cutlery","أدوات المائدة"],["tableware","أواني المائدة"],
+  // drinkware
+  ["coffee cup","فنجان قهوة"],["coffee cups","فناجين قهوة"],["espresso cup","فنجان إسبريسو"],["tea cup","كوب شاي"],["teacup","كوب شاي"],
+  ["cup and saucer","فنجان وصحن"],["cup & saucer","فنجان وصحن"],["saucer","صحن فنجان"],["mug","كوب"],["mugs","أكواب"],
+  ["tumbler","كوب"],["tumblers","أكواب"],["highball glass","كأس طويلة"],["wine glass","كأس نبيذ"],["water glass","كأس ماء"],
+  ["carafe","دورق"],["carafes","دوارق"],["pitcher","إبريق"],["jug","إبريق"],["teapot","إبريق شاي"],["coffee pot","دلة قهوة"],
+  ["drinkware","أدوات الشرب"],
+  // other categories
+  ["tray","صينية"],["trays","صوانٍ"],["serving tray","صينية تقديم"],["candle holder","حامل شموع"],["lantern","فانوس"],
+  ["table lamp","مصباح طاولة"],["vase","مزهرية"],["vases","مزهريات"],["planter","أصيص"],["artificial plant","نبتة صناعية"],
+  ["placemat","مفرش صحن"],["placemats","مفارش صحون"],["table runner","مفرش طاولة طولي"],["tablecloth","مفرش طاولة"],
+  ["napkin","منديل قماش"],["napkins","مناديل قماش"],["cushion cover","غطاء وسادة"],["throw blanket","بطانية خفيفة"],
+  ["soap dispenser","موزع صابون"],["storage jar","مرطبان تخزين"],["canister","علبة تخزين"],["cutting board","لوح تقطيع"],
+  ["casserole","طنجرة"],["frying pan","مقلاة"],["saucepan","قدر صغير"],["kettle","غلاية"],
+  // materials & finishes
+  ["bone china","بورسلين عظمي"],["porcelain","بورسلين"],["stoneware","فخار حجري"],["ceramic","سيراميك"],["borosilicate glass","زجاج بوروسيليكات"],
+  ["crystal","كريستال"],["stainless steel","ستانلس ستيل"],["cast iron","حديد زهر"],["acacia wood","خشب الأكاسيا"],["gold rim","حافة ذهبية"],
+  ["gold-rimmed","بحافة ذهبية"],["handmade","مصنوع يدويًا"],["hand-painted","مرسوم يدويًا"],["ribbed","مضلع"],["fluted","مضلع"],["hammered","بنقشة مطروقة"],
+  // care
+  ["dishwasher safe","آمن للاستخدام في غسالة الصحون"],["microwave safe","آمن للاستخدام في الميكروويف"],["oven safe","آمن للاستخدام في الفرن"],
+  ["hand wash only","يُغسل باليد فقط"],["hand wash","يُغسل باليد"],["food safe","آمن للطعام"],["lead-free","خالٍ من الرصاص"],["lead free","خالٍ من الرصاص"],
+  ["set of 2","طقم من قطعتين"],["set of 4","طقم من 4 قطع"],["set of 6","طقم من 6 قطع"],["set of 12","طقم من 12 قطعة"],
+].sort((a,b)=>b[0].length-a[0].length);
+const AR_LOCKED_PHRASES = /^(dishwasher safe|microwave safe|oven safe|hand wash( only)?|food safe|lead[- ]free|set of \d+)$/i;
+const AR_GLOSSARY_MAP = Object.fromEntries(AR_GLOSSARY.map(([en,ar])=>[en.toLowerCase(), ar]));
+const AR_UNITS = { cm:"سم", mm:"مم", m:"م", ml:"مل", l:"لتر", ltr:"لتر", liter:"لتر", liters:"لتر", litre:"لتر", litres:"لتر", oz:"أونصة", g:"غ", kg:"كغ", pcs:"قطع", pc:"قطعة", pieces:"قطع", piece:"قطعة", persons:"أشخاص", person:"شخص", people:"أشخاص" };
+
+function escRe(t){ return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function protectForTranslation(text, extraKeep){
+  const store = [];
+  const tok = (ar) => { store.push(ar); return ` QZX${store.length-1}X `; };
+  let out = text;
+  // brand / explicit keep-as-is words (e.g. the Brand field)
+  (extraKeep||[]).filter(Boolean).sort((a,b)=>b.length-a.length).forEach(k=>{
+    out = out.replace(new RegExp(`\\b${escRe(k)}\\b`, 'gi'), m => tok(m));
+  });
+  // codes like CS9880, GEN-PRD-000001 and barcodes
+  out = out.replace(/\b(?!QZX\d+X\b)(?=[A-Z0-9-]*\d)[A-Z]{1,6}-?[A-Z0-9-]{2,}\b/g, m => tok(m));
+  out = out.replace(/\b\d{8,14}\b/g, m => tok(m));
+  // numbers + units: 12 cm, 350ml, 1.5 L, 6 pcs  → Arabic units
+  out = out.replace(/(\d+(?:[.,]\d+)?)\s?(cm|mm|ml|ltr|liters?|litres?|l|oz|kg|g|pcs|pc|pieces?|persons?|people|m)\b/gi,
+    (m, n, u) => tok(`${n} ${AR_UNITS[u.toLowerCase()] || u}`));
+  // fixed standalone phrases (care instructions, "set of N") — safe to lock without breaking Arabic word order
+  AR_GLOSSARY.filter(([en])=>AR_LOCKED_PHRASES.test(en)).forEach(([en, ar])=>{
+    out = out.replace(new RegExp(`\\b${escRe(en)}\\b`, 'gi'), () => tok(ar));
+  });
+  return { text: out.replace(/\s{2,}/g, ' ').trim(), store };
+}
+function restoreProtected(text, store){
+  let out = text;
+  for(let i = store.length - 1; i >= 0; i--){
+    const re = new RegExp(`Q\\s*Z\\s*X\\s*${i}\\s*X`, 'gi');
+    if(!re.test(out)) return null;
+    out = out.replace(new RegExp(`Q\\s*Z\\s*X\\s*${i}\\s*X`, 'gi'), store[i]);
+  }
+  return out;
+}
+function polishArabic(t){
+  return t
+    .replace(/,(?!\d)/g, '،').replace(/;/g, '؛').replace(/\?/g, '؟')
+    .replace(/\s+([،؛؟!.:])/g, '$1')
+    .replace(/([،؛])(?=\S)/g, '$1 ')
+    .replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+function chunkForTranslation(text, max=1200){
+  const parts = text.split(/(?<=[.!?\n])\s+/);
+  const chunks = []; let cur = '';
+  parts.forEach(p=>{ if((cur + ' ' + p).length > max && cur){ chunks.push(cur); cur = p; } else cur = cur ? cur + ' ' + p : p; });
+  if(cur) chunks.push(cur);
+  return chunks;
+}
+async function googleTranslate(text){
   const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(text)}`);
-  if(!res.ok) throw new Error('Translation service unavailable (HTTP ' + res.status + ')');
+  if(!res.ok) throw new Error('Google HTTP ' + res.status);
   const data = await res.json();
   return data[0].map(chunk => chunk[0]).join('');
+}
+async function myMemoryTranslate(text){
+  const res = await fetch(`https://api.mymemory.translated.net/get?langpair=en|ar&q=${encodeURIComponent(text.slice(0,480))}`);
+  if(!res.ok) throw new Error('MyMemory HTTP ' + res.status);
+  const data = await res.json();
+  const t = data && data.responseData && data.responseData.translatedText;
+  if(!t || /MYMEMORY WARNING|INVALID/i.test(t)) throw new Error('MyMemory unavailable');
+  return t;
+}
+async function translateChunk(text){
+  try { return await googleTranslate(text); }
+  catch(e){ console.warn('Primary translator failed, using backup', e); return await myMemoryTranslate(text); }
+}
+async function translateEnglishToArabic(text, opts){
+  opts = opts || {};
+  const clean = text.replace(/\s+/g,' ').trim();
+  // whole text is a known shop term (e.g. a short product name) → use the house translation directly
+  const exact = AR_GLOSSARY_MAP[clean.toLowerCase().replace(/[.!]+$/,'')];
+  if(exact) return exact;
+  const { text: prepared, store } = protectForTranslation(clean, opts.keep);
+  let result = null;
+  if(store.length){
+    try{
+      const out = (await Promise.all(chunkForTranslation(prepared).map(translateChunk))).join(' ');
+      result = restoreProtected(out, store);
+    }catch(e){ console.warn('Protected translation failed, retrying plain', e); }
+  }
+  if(result === null){
+    result = (await Promise.all(chunkForTranslation(clean).map(translateChunk))).join(' ');
+  }
+  return polishArabic(result);
 }
 async function handleTranslateClick(btn, row, cIdx, sourceFieldName, onDone){
   const sourceIdx = IDX[sourceFieldName];
@@ -1070,11 +1319,13 @@ async function handleTranslateClick(btn, row, cIdx, sourceFieldName, onDone){
   btn.innerHTML = '…';
   btn.disabled = true;
   try{
-    const translated = await translateEnglishToArabic(sourceText);
+    const brandIdx = IDX["Brand"];
+    const keep = [ brandIdx > -1 ? (row.values[brandIdx]||'').trim() : '' ];
+    const translated = await translateEnglishToArabic(sourceText, { keep });
     btn.innerHTML = original;
     btn.disabled = false;
     if(!translated || !translated.trim()){ alert('Translation came back empty — please type the Arabic text manually.'); return; }
-    mutateWithHistory(`Row: ${sourceFieldName} translated to Arabic`, ()=>{
+    mutateWithHistory(`Row: ${sourceFieldName} translated to Arabic (please review)`, ()=>{
       row.values[cIdx] = translated;
       stampEdit(row);
     });
@@ -1468,7 +1719,7 @@ function doAutosave(){
   try{
     const payload = {
       rows: rows.map(r=>({ id:r.id, values:r.values, createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
-      dynamicCategories, dynamicStaff, currentUser, skuCounter,
+      catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, currentUser, skuCounter,
       categorySubcatsOverride: CATEGORY_SUBCATS,
       materialsOverride: MATERIALS_BY_CATEGORY
     };
@@ -1480,14 +1731,16 @@ function loadState(){
     const raw = localStorage.getItem('cs_pde_state_v1');
     if(!raw) return false;
     const payload = JSON.parse(raw);
+    if((payload.catalogVersion||1) < CATALOG_VERSION){ delete payload.categorySubcatsOverride; delete payload.materialsOverride; delete payload.dynamicCategories; }
     if(payload.categorySubcatsOverride) Object.assign(CATEGORY_SUBCATS, payload.categorySubcatsOverride);
     if(payload.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, payload.materialsOverride);
     if(payload.dynamicCategories) dynamicCategories = payload.dynamicCategories;
     if(payload.dynamicStaff) dynamicStaff = payload.dynamicStaff;
+    if(Array.isArray(payload.dynamicCollections)) dynamicCollections = payload.dynamicCollections;
     if(payload.currentUser) currentUser = payload.currentUser;
     if(payload.skuCounter) skuCounter = payload.skuCounter;
     if(payload.rows && payload.rows.length){
-      rows = payload.rows.map(r=>({ id:r.id, values:r.values, createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
+      rows = payload.rows.map(r=>({ id:r.id, values:normalizeRowValues(r.values), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
     }
     return true;
   }catch(e){ return false; }
@@ -1652,7 +1905,128 @@ function bindInstantAction(btn, fn){
   btn.addEventListener('click', ev => { ev.stopPropagation(); if(ev.detail === 0 && !btn.disabled) fn(); });
 }
 
+/* ---- Dropdown for "select or type" fields.
+   Replaces the browser's datalist so every arrow looks the same, shows a
+   pointer (hand) cursor, opens with ONE click and always lists every option. ---- */
+const CHEVRON_SVG = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>`;
+let comboMenuEl = null, comboState = null;
+function ensureComboMenu(){
+  if(comboMenuEl) return comboMenuEl;
+  comboMenuEl = document.createElement('div');
+  comboMenuEl.className = 'combo-menu';
+  comboMenuEl.addEventListener('mousedown', e => e.preventDefault()); // keep focus in the input
+  document.body.appendChild(comboMenuEl);
+  document.addEventListener('mousedown', e => {
+    if(!comboState) return;
+    if(comboMenuEl.contains(e.target) || e.target === comboState.input || (comboState.arrow && comboState.arrow.contains(e.target))) return;
+    closeComboMenu();
+  }, true);
+  window.addEventListener('resize', closeComboMenu);
+  document.addEventListener('scroll', e => { if(comboState && !comboMenuEl.contains(e.target)) closeComboMenu(); }, true);
+  return comboMenuEl;
+}
+function closeComboMenu(){
+  if(!comboState) return;
+  if(comboState.arrow) comboState.arrow.classList.remove('open');
+  comboState = null;
+  if(comboMenuEl){ comboMenuEl.classList.remove('show'); comboMenuEl.innerHTML=''; }
+}
+function renderComboMenu(filterText){
+  const st = comboState; if(!st) return;
+  const all = st.getOptions() || [];
+  const q = (filterText||'').trim().toLowerCase();
+  const list = q ? all.filter(o=>o.toLowerCase().includes(q)) : all.slice();
+  st.items = list; if(st.active >= list.length) st.active = list.length ? 0 : -1;
+  const cur = (st.input.value||'').toLowerCase();
+  comboMenuEl.innerHTML = list.length
+    ? list.map((o,i)=>`<div class="combo-opt${i===st.active?' active':''}${o.toLowerCase()===cur?' selected':''}" data-i="${i}"><span>${o.replace(/</g,'&lt;')}</span>${o.toLowerCase()===cur?'<b>✓</b>':''}</div>`).join('')
+    : `<div class="combo-empty">${q ? 'No match — press Enter to keep “'+st.input.value.replace(/</g,'&lt;')+'”' : st.emptyText}</div>`;
+  comboMenuEl.querySelectorAll('.combo-opt').forEach(el=>{
+    el.addEventListener('click', ()=> pickComboOption(parseInt(el.dataset.i,10)));
+    el.addEventListener('mouseenter', ()=>{ st.active = parseInt(el.dataset.i,10); comboMenuEl.querySelectorAll('.combo-opt').forEach(x=>x.classList.toggle('active', x===el)); });
+  });
+  const anchor = st.anchor.getBoundingClientRect();
+  comboMenuEl.style.minWidth = Math.max(anchor.width, 180) + 'px';
+  comboMenuEl.classList.add('show');
+  const mh = comboMenuEl.offsetHeight;
+  const below = window.innerHeight - anchor.bottom;
+  comboMenuEl.style.left = Math.min(anchor.left, window.innerWidth - comboMenuEl.offsetWidth - 8) + 'px';
+  comboMenuEl.style.top = (below < mh + 8 && anchor.top > mh + 8 ? anchor.top - mh - 4 : anchor.bottom + 4) + 'px';
+  const act = comboMenuEl.querySelector('.combo-opt.active'); if(act) act.scrollIntoView({block:'nearest'});
+}
+function openComboMenu(input, getOptions, anchor, arrow, emptyText, showAll){
+  ensureComboMenu();
+  if(comboState && comboState.input !== input) closeComboMenu();
+  comboState = { input, getOptions, anchor, arrow, emptyText: emptyText || 'No options yet — type to add one', active: -1, items: [], filter: showAll ? '' : input.value };
+  if(arrow) arrow.classList.add('open');
+  const all = getOptions() || [];
+  comboState.active = Math.max(0, all.findIndex(o=>o.toLowerCase()===(input.value||'').toLowerCase()));
+  renderComboMenu(comboState.filter);
+}
+function pickComboOption(i){
+  const st = comboState; if(!st || i<0 || i>=st.items.length) return;
+  const input = st.input, val = st.items[i];
+  closeComboMenu();
+  input.value = val;
+  input.dispatchEvent(new Event('input', {bubbles:true}));
+  input.dispatchEvent(new Event('change', {bubbles:true}));
+}
+/* Wire an input as a combo. Returns the wrapper (input + arrow button). */
+function makeCombo(input, getOptions, emptyText){
+  const wrap = document.createElement('div'); wrap.className = 'combo-wrap';
+  const arrow = document.createElement('button');
+  arrow.type = 'button'; arrow.className = 'combo-arrow'; arrow.tabIndex = -1;
+  arrow.title = 'Show all options'; arrow.innerHTML = CHEVRON_SVG;
+  wrap.appendChild(input); wrap.appendChild(arrow);
+  const anchor = () => wrap.closest('.cellbox') || wrap;
+  arrow.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    if(input.disabled) return;
+    if(comboState && comboState.input === input){ closeComboMenu(); return; }
+    if(document.activeElement !== input) input.focus();
+    openComboMenu(input, getOptions, anchor(), arrow, emptyText, true);
+  });
+  input.addEventListener('input', e => { if(e.isTrusted && document.activeElement === input) openComboMenu(input, getOptions, anchor(), arrow, emptyText, false); });
+  input.addEventListener('blur', () => setTimeout(()=>{ if(comboState && comboState.input === input && document.activeElement !== input) closeComboMenu(); }, 120));
+  // registered before the grid's own key handler, so it can take over arrows/Enter while open
+  input.addEventListener('keydown', e => {
+    const open = comboState && comboState.input === input;
+    if(e.altKey && e.key === 'ArrowDown'){ e.preventDefault(); e.stopImmediatePropagation(); openComboMenu(input, getOptions, anchor(), arrow, emptyText, true); return; }
+    if(!open) return;
+    if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+      e.preventDefault(); e.stopImmediatePropagation();
+      const n = comboState.items.length; if(!n) return;
+      comboState.active = (comboState.active + (e.key==='ArrowDown'?1:-1) + n) % n;
+      renderComboMenu(comboState.filter);
+    } else if(e.key === 'Enter'){
+      if(comboState.active > -1 && comboState.items.length){ e.preventDefault(); e.stopImmediatePropagation(); pickComboOption(comboState.active); }
+      else closeComboMenu();
+    } else if(e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); closeComboMenu(); }
+    else if(e.key === 'Tab'){ closeComboMenu(); }
+  });
+  return wrap;
+}
+
+/* ---- Field layout: every cell gets the same framed box, height, padding and
+   icon slot, and a sensible width for its kind of content. ---- */
+const FIELD_WIDTHS = {
+  "Product Name EN":230, "Product Name AR":230, "SKU":170, "Barcode / EAN / UPC":170, "Brand":160,
+  "Main Category":200, "Subcategory":210, "Collection":200, "Description EN":320, "Description AR":320,
+  "Color":165, "Material":185, "Pieces Number":120, "Suitable For / Persons":130,
+  "Included Pieces":230, "Care Instructions":230, "Width":120, "Length":120, "Height":120, "Depth":120,
+  "Diameter":120, "Capacity":130, "Regular Price":130, "Stock Status":165, "Assigned To":175,
+  "Review Status":165, "Internal Notes":240
+};
+const FIELD_PLACEHOLDERS = {
+  "Product Name EN":"Product name", "Product Name AR":"اسم المنتج", "SKU":"e.g. CS-0001",
+  "Barcode / EAN / UPC":"EAN / UPC", "Brand":"Brand", "Description EN":"Describe the product…",
+  "Description AR":"وصف المنتج…", "Included Pieces":"e.g. 6 plates, 6 bowls",
+  "Care Instructions":"e.g. Dishwasher safe", "Internal Notes":"Notes for the team",
+  "Regular Price":"0.00"
+};
+
 function renderBody(){
+  closeComboMenu();
   sortEmptyRowsLast();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = "";
@@ -1753,33 +2127,40 @@ function renderBody(){
       if(f.type === "select"){
         el = document.createElement('select');
         el.className = 'cell';
-        const blank = document.createElement('option'); blank.value=""; blank.textContent = disabled ? "—" : "Select…";
+        const blank = document.createElement('option'); blank.value=""; blank.textContent = disabled ? "Not applicable" : "Select…";
         el.appendChild(blank);
         f.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; if(row.values[cIdx]===opt) o.selected=true; el.appendChild(o); });
 
-      } else if(["combo","combo-sub","combo-material","combo-category","combo-staff"].includes(f.type)){
+      } else if(["combo","combo-sub","combo-material","combo-category","combo-staff","combo-collection"].includes(f.type)){
         let options = [];
         if(f.type === "combo") options = f.options;
         if(f.type === "combo-sub") options = CATEGORY_SUBCATS[category] || [];
         if(f.type === "combo-material") options = MATERIALS_BY_CATEGORY[category] || MATERIALS_DEFAULT;
         if(f.type === "combo-category") options = dynamicCategories;
         if(f.type === "combo-staff") options = dynamicStaff;
-
-        const dlId = `dl_${f.name.replace(/[^a-z0-9]/gi,'')}_${row.id}`;
-        const datalist = document.createElement('datalist'); datalist.id = dlId;
-        options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; datalist.appendChild(o); });
+        if(f.type === "combo-collection") options = allCollections();
 
         el = document.createElement('input');
-        el.type = 'text'; el.className = 'cell combo'; el.setAttribute('list', dlId);
-        el.placeholder = disabled ? "—" : (f.type==="combo-sub" && !category ? "Pick category first" : "Select or type…");
+        el.type = 'text'; el.className = 'cell combo'; el.autocomplete = 'off';
+        el.placeholder = disabled ? "Not applicable" : (f.type==="combo-sub" && !category ? "Choose category first" : "Select or type…");
         el.value = row.values[cIdx] || "";
-        td.appendChild(datalist);
+        el._comboOptions = () => {
+          const cat = row.values[IDX["Main Category"]];
+          if(f.type === "combo") return f.options;
+          if(f.type === "combo-sub") return CATEGORY_SUBCATS[cat] || [];
+          if(f.type === "combo-material") return MATERIALS_BY_CATEGORY[cat] || MATERIALS_DEFAULT;
+          if(f.type === "combo-category") return dynamicCategories;
+          if(f.type === "combo-staff") return dynamicStaff;
+          if(f.type === "combo-collection") return allCollections();
+          return options;
+        };
+        el._comboEmpty = f.type==="combo-sub" && !category ? "Choose a main category first" : null;
 
       } else if(MULTILINE_FIELDS[f.name]){
         el = document.createElement('textarea');
         el.className = 'cell ' + MULTILINE_FIELDS[f.name];
         el.rows = 1;
-        el.placeholder = f.name;
+        el.placeholder = FIELD_PLACEHOLDERS[f.name] || f.name;
         el.value = row.values[cIdx] || "";
         if(f.rtl) el.classList.add('rtl-field');
         el.addEventListener('input', () => autoGrow(el));
@@ -1788,7 +2169,7 @@ function renderBody(){
         el.className = 'cell';
         el.type = f.type === "number" ? "number" : "text";
         if(f.type==="number"){ if(f.min!==undefined) el.min = f.min; el.step = f.integer ? 1 : "any"; }
-        el.placeholder = f.name;
+        el.placeholder = disabled ? "Not applicable" : (FIELD_PLACEHOLDERS[f.name] || (f.type==="number" ? "0" : f.name));
         el.value = row.values[cIdx] || "";
         if(f.rtl) el.classList.add('rtl-field');
       }
@@ -1821,6 +2202,7 @@ function renderBody(){
         logActivity(`Row ${rIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
         updateUndoRedoButtons();
         scheduleAutosave();
+        if(f.name === "Collection") addCollectionIfNew(row.values[cIdx]);
         if(f.name === "Main Category"){
           addCategoryIfNew(row.values[cIdx]);
           if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
@@ -1838,7 +2220,7 @@ function renderBody(){
       let cellContent = el;
 
       if(!disabled && f.type === "number" && (f.unit || f.dynamicUnit)){
-        const unitText = f.unit ? f.unit : (category === "Drinkware" ? "ml" : "");
+        const unitText = f.unit ? f.unit : (CAPACITY_ML_CATEGORIES.includes(category) ? "ml" : "");
         if(unitText){
           const wrap = document.createElement('div'); wrap.className = 'unit-wrap';
           wrap.appendChild(el);
@@ -1869,7 +2251,16 @@ function renderBody(){
         cellContent = wrap;
       }
 
-      td.appendChild(cellContent);
+      if(el.classList.contains('combo')){
+        const cw = makeCombo(el, el._comboOptions, el._comboEmpty);
+        if(disabled) cw.classList.add('is-disabled');
+        cellContent = cw;
+      }
+      const field = document.createElement('div');
+      field.className = 'cellbox cellbox-' + (f.type === 'number' ? 'number' : (el.tagName === 'TEXTAREA' ? 'multiline' : 'text'));
+      if(FIELD_WIDTHS[f.name]) field.style.width = FIELD_WIDTHS[f.name] + 'px';
+      field.appendChild(cellContent);
+      td.appendChild(field);
 
       // fill-down handle (skip unique/identifying fields and disabled cells)
       if(!disabled && !f.dupeCheck && f.type !== "image" && rIdx < rows.length-1){
@@ -2047,6 +2438,10 @@ function refreshFilterOptions(){
   catSel.innerHTML = '<option value="">All</option>' + dynamicCategories.map(c=>`<option value="${c}">${c}</option>`).join('');
   catSel.value = keep;
   updateSubcategoryFilterOptions();
+  const colSel = document.getElementById('fCollection');
+  const keepCol = colSel.value;
+  colSel.innerHTML = '<option value="">All</option>' + allCollections().map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c.replace(/</g,'&lt;')}</option>`).join('');
+  colSel.value = keepCol;
 }
 function updateSubcategoryFilterOptions(){
   const cat = document.getElementById('fCategory').value;
@@ -2065,6 +2460,7 @@ function applyFilters(){
   const onlyInvalid = document.getElementById('onlyInvalid').checked;
   const fCategory = document.getElementById('fCategory').value;
   const fSubcategory = document.getElementById('fSubcategory').value;
+  const fCollection = document.getElementById('fCollection').value;
   const fBrand = document.getElementById('fBrand').value.toLowerCase().trim();
   const fStock = document.getElementById('fStock').value;
   const fStatus = document.getElementById('fStatus').value;
@@ -2083,6 +2479,7 @@ function applyFilters(){
     if(show && onlyInvalid) show = rowHasInvalid(row);
     if(show && fCategory) show = row.values[IDX["Main Category"]] === fCategory;
     if(show && fSubcategory) show = row.values[IDX["Subcategory"]] === fSubcategory;
+    if(show && fCollection) show = (row.values[IDX["Collection"]]||"").trim().toLowerCase() === fCollection.toLowerCase();
     if(show && fBrand) show = (row.values[IDX["Brand"]]||"").toLowerCase().includes(fBrand);
     if(show && fStock) show = stockStatusOf(row) === fStock;
     if(show && fStatus) show = computeStatus(row) === fStatus;
@@ -2102,6 +2499,7 @@ function resetFilters(){
   document.getElementById('fCategory').value = '';
   updateSubcategoryFilterOptions();
   document.getElementById('fSubcategory').value = '';
+  document.getElementById('fCollection').value = '';
   document.getElementById('fBrand').value = '';
   document.getElementById('fStock').value = '';
   document.getElementById('fStatus').value = '';
@@ -2138,6 +2536,7 @@ function resetFiltersQuiet(){
   activeViewExtra = null;
   document.getElementById('fCategory').value = '';
   document.getElementById('fSubcategory').value = '';
+  document.getElementById('fCollection').value = '';
   document.getElementById('fBrand').value = '';
   document.getElementById('fStock').value = '';
   document.getElementById('fStatus').value = '';
@@ -2376,6 +2775,11 @@ function closeManageModal(){ document.getElementById('manageModal').classList.ad
 function renderManageModal(){
   const body = document.getElementById('manageBody');
   body.innerHTML = '';
+  const colCard = document.createElement('div'); colCard.className='manage-cat-card';
+  const colH = document.createElement('h3'); const colSpan = document.createElement('span'); colSpan.textContent = 'Collections'; colH.appendChild(colSpan);
+  colCard.appendChild(colH);
+  colCard.appendChild(buildChipGroup('Collections', dynamicCollections));
+  body.appendChild(colCard);
   dynamicCategories.forEach(cat=>{
     const card = document.createElement('div'); card.className='manage-cat-card';
     const h3 = document.createElement('h3');
@@ -2511,6 +2915,7 @@ function focusedNext(){ if(focusedRowIdx<rows.length-1){ focusedRowIdx++; render
 function selectFocusedStep(key){ focusedStep = key; renderFocusedMode(); }
 
 function renderFocusedMode(){
+  closeComboMenu();
   const row = rows[focusedRowIdx];
   const status = computeStatus(row);
   const pct = rowCompletionPct(row);
@@ -2593,19 +2998,17 @@ function buildFocusedField(f, row, cIdx){
     el.className = 'f-input';
     const blank = document.createElement('option'); blank.value=''; blank.textContent='Select…'; el.appendChild(blank);
     f.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; if(row.values[cIdx]===opt) o.selected=true; el.appendChild(o); });
-  } else if(['combo','combo-sub','combo-material','combo-category','combo-staff'].includes(f.type)){
+  } else if(['combo','combo-sub','combo-material','combo-category','combo-staff','combo-collection'].includes(f.type)){
     let options = [];
     if(f.type === 'combo') options = f.options;
     if(f.type === 'combo-sub') options = CATEGORY_SUBCATS[category] || [];
     if(f.type === 'combo-material') options = MATERIALS_BY_CATEGORY[category] || MATERIALS_DEFAULT;
     if(f.type === 'combo-category') options = dynamicCategories;
     if(f.type === 'combo-staff') options = dynamicStaff;
-    const dlId = `fdl_${f.name.replace(/[^a-z0-9]/gi,'')}_${row.id}`;
-    const datalist = document.createElement('datalist'); datalist.id = dlId;
-    options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; datalist.appendChild(o); });
-    wrap.appendChild(datalist);
+    if(f.type === 'combo-collection') options = allCollections();
     el = document.createElement('input');
-    el.type = 'text'; el.className = 'f-input'; el.setAttribute('list', dlId);
+    el.type = 'text'; el.className = 'f-input'; el.autocomplete = 'off';
+    el._comboOptions = () => options;
     el.placeholder = 'Select or type…';
     el.value = row.values[cIdx] || '';
   } else {
@@ -2630,6 +3033,7 @@ function buildFocusedField(f, row, cIdx){
     logActivity(`Row ${focusedRowIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
     updateUndoRedoButtons();
     scheduleAutosave();
+    if(f.name === "Collection") addCollectionIfNew(row.values[cIdx]);
     if(f.name === "Main Category"){
       addCategoryIfNew(row.values[cIdx]);
       if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
@@ -2642,10 +3046,16 @@ function buildFocusedField(f, row, cIdx){
     }
   });
 
-  wrap.appendChild(el);
+  if(el._comboOptions && !disabled){
+    const cw = makeCombo(el, el._comboOptions);
+    cw.classList.add('f-combo');
+    wrap.appendChild(cw);
+  } else {
+    wrap.appendChild(el);
+  }
 
   if(!disabled && f.type==='number' && (f.unit || f.dynamicUnit)){
-    const unitText = f.unit ? f.unit : (category === "Drinkware" ? "ml" : "");
+    const unitText = f.unit ? f.unit : (CAPACITY_ML_CATEGORIES.includes(category) ? "ml" : "");
     if(unitText){ const span = document.createElement('span'); span.className='f-unit'; span.textContent=unitText; wrap.appendChild(span); }
   }
   if(!disabled && f.rtl){
