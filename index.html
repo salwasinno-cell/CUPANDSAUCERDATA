@@ -97,7 +97,6 @@
   tbody td{border-right:1px solid var(--hairline);border-bottom:1px solid var(--hairline);padding:0;background:var(--white);position:relative;}
   tbody tr:nth-child(even) td{background:#FCFBF8;}
   tbody tr:hover td{background:var(--brass-light) !important;opacity:1;}
-  tbody tr:hover td input.cell, tbody tr:hover td select.cell{background:transparent;}
   tbody tr.hidden-row{display:none;}
   tbody tr.selected-row td{background:#F3EBD3 !important;}
 
@@ -117,16 +116,22 @@
   .rowno .status-dot.status-ready{background:var(--brass-dim);}
   .rowno .status-dot.status-published{background:var(--ok);}
 
-  input.cell, select.cell{width:100%;min-width:130px;border:none;border-left:2px solid transparent;background:transparent;font-family:inherit;font-size:12.8px;color:var(--ink);padding:9px 14px;outline:none;appearance:none;-webkit-appearance:none;}
+  input.cell, select.cell, textarea.cell{width:100%;min-width:130px;border:none;border-left:2px solid transparent;background:transparent;font-family:inherit;font-size:12.8px;color:var(--ink);padding:9px 14px;outline:none;appearance:none;-webkit-appearance:none;}
   select.cell{cursor:pointer;background-image:linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);background-position: calc(100% - 16px) center, calc(100% - 11px) center;background-size:5px 5px, 5px 5px;background-repeat:no-repeat;padding-right:28px;}
   input.cell.combo{background-image:linear-gradient(45deg, transparent 50%, var(--brass-dim) 50%), linear-gradient(135deg, var(--brass-dim) 50%, transparent 50%);background-position: calc(100% - 16px) center, calc(100% - 11px) center;background-size:5px 5px, 5px 5px;background-repeat:no-repeat;padding-right:28px;}
-  input.cell::placeholder{color:#C6C4B8;}
-  input.cell:focus, select.cell:focus{border-left:2px solid var(--brass);background-color:var(--brass-light) !important;}
-  td.required-empty input.cell, td.required-empty select.cell{background-color:var(--danger-light);}
+  input.cell::placeholder, textarea.cell::placeholder{color:#C6C4B8;}
+  input.cell.combo{position:relative;}
+  input.cell.combo::-webkit-calendar-picker-indicator{opacity:0;cursor:pointer;position:absolute;right:0;top:0;width:28px;height:100%;margin:0;padding:0;}
+  input.cell.combo::-webkit-list-button{opacity:0;}
+  textarea.cell{display:block;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;line-height:1.45;min-height:36px;height:36px;}
+  textarea.cell.wide{min-width:260px;}
+  textarea.cell.mid{min-width:190px;}
+  input.cell:focus, select.cell:focus, textarea.cell:focus{border-left:2px solid var(--brass);background-color:var(--brass-light) !important;}
+  td.required-empty input.cell, td.required-empty select.cell, td.required-empty textarea.cell{background-color:var(--danger-light);}
   td.duplicate-val input.cell{background-color:var(--danger-light);border-left:2px solid var(--danger);}
   td.invalid-value input.cell{background-color:var(--warn-light);border-left:2px solid var(--warn);}
   td.disabled-field{background:#F1EFE8 !important;}
-  td.disabled-field input.cell, td.disabled-field select.cell{color:#C2C0B4;cursor:not-allowed;}
+  td.disabled-field input.cell, td.disabled-field select.cell, td.disabled-field textarea.cell{color:#C2C0B4;cursor:not-allowed;}
   .rtl-field{direction:rtl;text-align:right;}
 
   .fill-handle{position:absolute;right:2px;bottom:2px;width:9px;height:9px;background:var(--brass);border:1px solid var(--white);cursor:crosshair;display:none;z-index:1;}
@@ -137,9 +142,10 @@
   .unit-wrap input.cell{flex:1;min-width:70px;}
   .unit-suffix{font-size:11px;color:var(--ink-soft);padding-right:12px;white-space:nowrap;pointer-events:none;}
 
-  .translate-wrap{display:flex;align-items:center;width:100%;}
-  .translate-wrap input.cell{flex:1;min-width:90px;}
-  .translate-btn{border:none;background:transparent;color:var(--brass-dim);cursor:pointer;padding:0 10px;flex-shrink:0;display:flex;align-items:center;}
+  .translate-wrap{display:flex;align-items:flex-start;width:100%;}
+  .translate-wrap input.cell, .translate-wrap textarea.cell{flex:1;min-width:90px;}
+  .translate-wrap textarea.cell.wide{min-width:240px;}
+  .translate-btn{border:none;background:transparent;color:var(--brass-dim);cursor:pointer;padding:0 10px;height:36px;flex-shrink:0;display:flex;align-items:center;}
   .translate-btn:hover{color:var(--brass);}
   .translate-btn:disabled{opacity:0.5;cursor:wait;}
   .translate-btn svg{width:16px;height:16px;}
@@ -148,14 +154,14 @@
   .f-translate-btn:disabled{opacity:0.5;cursor:wait;}
   .f-translate-btn svg{width:14px;height:14px;}
 
-  .image-cell{display:flex;align-items:center;gap:10px;padding:10px 12px;min-width:220px;}
+  .image-cell{position:relative;display:inline-flex;align-items:center;padding:10px 12px;}
   .img-thumb{width:var(--thumb-size);height:var(--thumb-size);flex-shrink:0;border-radius:6px;border:1.5px dashed var(--hairline-strong);background:var(--ivory-2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;padding:0;transition:width 0.15s ease, height 0.15s ease;}
   .img-thumb:hover{border-color:var(--brass);background:var(--brass-light);}
   .img-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .img-thumb svg{width:22px;height:22px;}
   .img-name{font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;}
-  .img-remove{border:none;background:transparent;color:var(--danger);font-size:13px;cursor:pointer;opacity:0.5;flex-shrink:0;padding:2px;}
-  .img-remove:hover{opacity:1;}
+  .img-remove{position:absolute;top:4px;left:calc(12px + var(--thumb-size) - 12px);width:18px;height:18px;border-radius:50%;border:1px solid var(--hairline-strong);background:var(--white);color:var(--danger);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,0.15);z-index:2;}
+  .img-remove:hover{background:var(--danger);color:var(--white);border-color:var(--danger);}
 
   /* ---------- Image size control (header icon + popover) ---------- */
   .th-image-head{display:flex;align-items:center;gap:6px;position:relative;}
@@ -765,6 +771,7 @@ document.getElementById('statFields').textContent = flatFields.length;
 /* ========================================================================
    STATE
    ======================================================================== */
+let focusedRowIdx = 0;   // declared early: renderBody() reads it
 let rows = [];              // [{ id, values, createdAt, createdBy, lastEditedAt, lastEditedBy }]
 let dynamicStaff = [];
 let currentUser = localStorage.getItem('cs_pde_user') || '';
@@ -1534,7 +1541,7 @@ function focusCellAt(rIdx, colName){
   const cIdx = IDX[colName];
   const td = tr.children[cIdx+1]; // +1 for the rowno cell
   if(!td) return false;
-  const input = td.querySelector('input.cell, select.cell');
+  const input = td.querySelector('input.cell, select.cell, textarea.cell');
   if(!input || input.disabled) return false;
   input.focus();
   if(input.select) input.select();
@@ -1559,6 +1566,14 @@ function moveHorizontal(rIdx, colName, dir){
   }
 }
 function handleCellKeydown(e, rIdx, f, cIdx){
+  const t = e.target;
+  if(t && t.tagName === 'TEXTAREA'){
+    const atStart = t.selectionStart === 0 && t.selectionEnd === 0;
+    const atEnd = t.selectionStart === t.value.length && t.selectionEnd === t.value.length;
+    if(e.key === 'Enter' && e.shiftKey) return;                       // new line
+    if((e.key === 'ArrowUp' || e.key === 'ArrowLeft') && !atStart) return;
+    if((e.key === 'ArrowDown' || e.key === 'ArrowRight') && !atEnd) return;
+  }
   if(e.key === 'ArrowUp'){ e.preventDefault(); moveVertical(rIdx, f.name, -1); }
   else if(e.key === 'ArrowDown'){ e.preventDefault(); moveVertical(rIdx, f.name, 1); }
   else if(e.key === 'Enter'){ e.preventDefault(); moveVertical(rIdx, f.name, 1); }
@@ -1590,7 +1605,55 @@ document.addEventListener('keydown', e=>{
 /* ========================================================================
    RENDER TABLE
    ======================================================================== */
+/* ---- Keep filled products together at the top and all empty rows at the bottom.
+   Stable: the original order inside each group is kept, so nothing else shuffles.
+   Also re-points Focused Mode at the same product if its position changed. ---- */
+function sortEmptyRowsLast(){
+  const focusedId = rows[focusedRowIdx] ? rows[focusedRowIdx].id : null;
+  const filled = [], empty = [];
+  rows.forEach(r => (rowHasAnyValue(r) ? filled : empty).push(r));
+  rows = filled.concat(empty);
+  if(focusedId !== null){
+    const i = rows.findIndex(r => r.id === focusedId);
+    if(i !== -1) focusedRowIdx = i;
+  }
+}
+
+/* ---- Long free-text fields wrap onto several lines and the row grows to fit,
+   so the whole sentence is always visible (no hidden overflow). ---- */
+const MULTILINE_FIELDS = {
+  "Description EN":"wide", "Description AR":"wide",
+  "Product Name EN":"mid", "Product Name AR":"mid",
+  "Included Pieces":"mid", "Care Instructions":"mid", "Internal Notes":"mid"
+};
+function autoGrow(el){
+  el.style.height = 'auto';
+  el.style.height = Math.max(36, el.scrollHeight) + 'px';
+}
+function autoGrowAll(root){
+  (root || document).querySelectorAll('textarea.cell').forEach(autoGrow);
+}
+let _growRaf = null;
+window.addEventListener('resize', () => { cancelAnimationFrame(_growRaf); _growRaf = requestAnimationFrame(()=>autoGrowAll()); });
+
+/* ---- Buttons that must work on the FIRST click even while a cell is being edited.
+   A normal click fires after the cell's blur/change, which can redraw the row and
+   swallow the click. Acting on pointerdown avoids that; the edited cell is
+   committed first so the latest typed text is used. ---- */
+function bindInstantAction(btn, fn){
+  btn.addEventListener('pointerdown', ev => {
+    if(ev.button !== 0) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const a = document.activeElement;
+    if(a && a !== btn && a.blur) a.blur();   // fires the cell's change handler synchronously
+    if(!btn.disabled) fn();
+  });
+  // keyboard activation (Enter/Space) still works
+  btn.addEventListener('click', ev => { ev.stopPropagation(); if(ev.detail === 0 && !btn.disabled) fn(); });
+}
+
 function renderBody(){
+  sortEmptyRowsLast();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = "";
   const mobileCards = document.getElementById('mobileCards');
@@ -1657,10 +1720,7 @@ function renderBody(){
           });
           deleteProductImageByUrl(oldUrl);
         });
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'img-name';
-        nameSpan.textContent = imgUrl ? 'Image uploaded' : 'No image';
-        wrap.appendChild(thumbBtn); wrap.appendChild(fileInput); wrap.appendChild(nameSpan);
+        wrap.appendChild(thumbBtn); wrap.appendChild(fileInput);
         if(imgUrl){
           const rmBtn = document.createElement('button');
           rmBtn.className = 'img-remove'; rmBtn.title = 'Remove image'; rmBtn.textContent = '✕';
@@ -1715,6 +1775,14 @@ function renderBody(){
         el.value = row.values[cIdx] || "";
         td.appendChild(datalist);
 
+      } else if(MULTILINE_FIELDS[f.name]){
+        el = document.createElement('textarea');
+        el.className = 'cell ' + MULTILINE_FIELDS[f.name];
+        el.rows = 1;
+        el.placeholder = f.name;
+        el.value = row.values[cIdx] || "";
+        if(f.rtl) el.classList.add('rtl-field');
+        el.addEventListener('input', () => autoGrow(el));
       } else {
         el = document.createElement('input');
         el.className = 'cell';
@@ -1786,10 +1854,7 @@ function renderBody(){
         const sourceFieldName = f.name.replace(' AR', ' EN');
         tBtn.title = `Auto-translate from ${sourceFieldName}`;
         tBtn.innerHTML = TRANSLATE_ICON;
-        tBtn.addEventListener('click', ev => {
-          ev.stopPropagation();
-          handleTranslateClick(tBtn, row, cIdx, sourceFieldName);
-        });
+        bindInstantAction(tBtn, () => handleTranslateClick(tBtn, row, cIdx, sourceFieldName));
         wrap.appendChild(tBtn);
         cellContent = wrap;
       } else if(!disabled && f.name === "Description EN"){
@@ -1799,10 +1864,7 @@ function renderBody(){
         gBtn.type = 'button'; gBtn.className = 'translate-btn';
         gBtn.title = 'Generate a description from this product\'s other fields';
         gBtn.innerHTML = GENERATE_ICON;
-        gBtn.addEventListener('click', ev => {
-          ev.stopPropagation();
-          handleGenerateDescriptionClick(gBtn, row, cIdx);
-        });
+        bindInstantAction(gBtn, () => handleGenerateDescriptionClick(gBtn, row, cIdx));
         wrap.appendChild(gBtn);
         cellContent = wrap;
       }
@@ -1871,6 +1933,7 @@ function renderBody(){
     mobileCards.innerHTML = `<div class="mcard-empty">No products yet — tap the + button to add one.</div>`;
   }
   document.getElementById('gridEmptyState').style.display = rows.length ? 'none' : 'flex';
+  autoGrowAll(document.getElementById('tbody'));
   updateStats();
   applyFilters();
   syncMirrorWidth();
@@ -2029,7 +2092,9 @@ function applyFilters(){
     if(show && activeViewExtra==='noimage') show = !rowHasImage(row);
     if(show && activeViewExtra==='noarabic') show = rowMissingArabic(row);
     if(show && activeViewExtra==='ready') { const s=computeStatus(row); show = (s==='Ready'||s==='Published'); }
+    const wasHidden = tr.classList.contains('hidden-row');
     tr.classList.toggle('hidden-row', !show);
+    if(wasHidden && show) autoGrowAll(tr); // textareas measure 0 while hidden
   });
 }
 function resetFilters(){
@@ -2428,7 +2493,6 @@ const FOCUSED_STEPS = [
   { key:'review', label:'08 Review & Publish', section:null },
 ];
 
-let focusedRowIdx = 0;
 let focusedStep = 'identification';
 
 function openFocusedMode(rIdx){
@@ -2589,14 +2653,14 @@ function buildFocusedField(f, row, cIdx){
     const tBtn = document.createElement('button');
     tBtn.type = 'button'; tBtn.className = 'f-translate-btn';
     tBtn.innerHTML = TRANSLATE_ICON + `<span>Translate from ${sourceFieldName}</span>`;
-    tBtn.addEventListener('click', () => handleTranslateClick(tBtn, row, cIdx, sourceFieldName, renderFocusedMode));
+    bindInstantAction(tBtn, () => handleTranslateClick(tBtn, row, cIdx, sourceFieldName, renderFocusedMode));
     wrap.appendChild(tBtn);
   }
   if(!disabled && f.name === "Description EN"){
     const gBtn = document.createElement('button');
     gBtn.type = 'button'; gBtn.className = 'f-translate-btn';
     gBtn.innerHTML = GENERATE_ICON + `<span>Generate from other fields</span>`;
-    gBtn.addEventListener('click', () => handleGenerateDescriptionClick(gBtn, row, cIdx, renderFocusedMode));
+    bindInstantAction(gBtn, () => handleGenerateDescriptionClick(gBtn, row, cIdx, renderFocusedMode));
     wrap.appendChild(gBtn);
   }
   if(!disabled && isFieldInvalid(f, row.values[cIdx])){
