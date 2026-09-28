@@ -495,6 +495,21 @@
   .f-img-remove{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.95);color:var(--danger);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,0.18);}
   .f-img-remove:hover{background:var(--danger);color:var(--white);border-color:var(--danger);}
   @media (max-width:860px){ .focused-field textarea.f-input{max-width:100%;font-size:16px;padding:12px 14px;} }
+  /* reordering */
+  .rowno .drag-handle{cursor:grab;color:var(--brass-dim);font-size:13px;line-height:1;padding:0 2px;user-select:none;opacity:0.7;}
+  .rowno .drag-handle:hover{opacity:1;}
+  #tbody tr.dragging{opacity:0.45;}
+  #tbody tr.dragging .drag-handle{cursor:grabbing;}
+  #tbody tr.drop-above td{box-shadow:inset 0 3px 0 var(--brass);}
+  #tbody tr.drop-below td{box-shadow:inset 0 -3px 0 var(--brass);}
+  .toolbar-select{background:transparent;border:1px solid #45464B;color:#D8D9D4;font:inherit;font-size:13px;padding:9px 30px 9px 14px;cursor:pointer;-webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23C7A764' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;background-size:11px;}
+  .toolbar-select:hover{border-color:var(--brass-dim);color:var(--brass-light);}
+  .toolbar-select option{color:var(--ink);background:var(--white);}
+  .mcard-move{display:flex;flex-direction:column;gap:6px;}
+  @media (max-width:860px){ .mcard-actions{flex-direction:row !important;} }
+  .mcard-actions .icon[disabled]{opacity:0.3;cursor:default;}
+  @media (max-width:860px){ .toolbar-select{flex-shrink:0;min-height:40px;font-size:12.5px;} }
 </style>
 </head>
 <body>
@@ -526,6 +541,19 @@
       <button class="btn-ghost" onclick="openHistory()">History</button>
       <button class="btn-ghost" onclick="openFocusedMode(0)">Focused Mode</button>
       <button class="btn-ghost" onclick="toggleFiltersPanel()">Filters</button>
+      <select class="toolbar-select" id="sortSelect" title="Sort all products" onchange="applySort(this.value); this.value='';">
+        <option value="">Sort by…</option>
+        <option value="name-asc">Name A → Z</option>
+        <option value="name-desc">Name Z → A</option>
+        <option value="sku">SKU</option>
+        <option value="category">Category</option>
+        <option value="collection">Collection</option>
+        <option value="price-asc">Price: low → high</option>
+        <option value="price-desc">Price: high → low</option>
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="completion">Most complete first</option>
+      </select>
       <button class="btn-ghost" onclick="openImportModal()">Import CSV</button>
       <button class="btn-ghost" onclick="openManageModal()">Manage Lists</button>
       <button class="btn-ghost" onclick="copyAsCSV()">Copy as CSV</button>
@@ -631,7 +659,7 @@
 
 <footer class="note">
   <span class="dot"></span>
-  <span class="note-desktop">Arrow keys/Enter/Tab move between cells. Hover a cell's bottom-right corner to fill it down. Ctrl/Cmd+Z to undo.</span>
+  <span class="note-desktop">Arrow keys/Enter/Tab move between cells. Hover a cell's bottom-right corner to fill it down. Drag ⠿ to reorder products. Ctrl/Cmd+Z to undo.</span>
   <span class="note-mobile">Tap a product card to open it in Focused Mode for editing.</span>
   <span class="legend">
     <span><span class="swatch" style="background:var(--danger-light);border:1px solid var(--danger)"></span>Missing / duplicate</span>
@@ -1012,9 +1040,10 @@ function scheduleConfigSave(){
   configSaveTimer = setTimeout(persistConfig, 600);
 }
 async function persistConfig(){
-  const data = { catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
+  const data = { catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
   const { error } = await sb.from('app_config').update({ data, updated_at: new Date().toISOString() }).eq('id', 1);
   if(error) console.error('Config sync error', error);
+  else orderSavePending = false;
 }
 function applyConfig(data){
   if(!data) return;
@@ -1045,6 +1074,11 @@ function applyConfig(data){
   }
   if(data.dynamicStaff) dynamicStaff = data.dynamicStaff;
   if(Array.isArray(data.dynamicCollections)) dynamicCollections = data.dynamicCollections;
+  if(Array.isArray(data.productOrder) && !orderSavePending){
+    const changed = data.productOrder.join(',') !== productOrder.join(',');
+    productOrder = data.productOrder.map(String);
+    if(changed) orderNeedsApply = true;
+  }
   if(typeof data.skuCounter === 'number') skuCounter = Math.max(skuCounter, data.skuCounter);
   if(needsCatalogUpgrade && typeof sb !== 'undefined' && sb) scheduleConfigSave();
 }
@@ -1541,6 +1575,7 @@ function duplicateRow(idx){
     if(IDX["Barcode / EAN / UPC"]>-1) copy.values[IDX["Barcode / EAN / UPC"]] = "";
     rows.splice(idx+1, 0, copy);
   });
+  commitOrder();
 }
 function openClearSheetModal(){
   if(!rows.length){ alert('The sheet is already empty.'); return; }
@@ -1676,10 +1711,12 @@ function undo(){
   const before = cloneRows();
   const prev = undoStack.pop();
   redoStack.push(before);
+  const sigBefore = orderSignature(rows);
   rows = prev;
   logActivity('Undo');
   syncRowsDiff(before, rows);
   renderBody();
+  if(orderSignature(rows) !== sigBefore) commitOrder();
   scheduleAutosave();
   updateUndoRedoButtons();
 }
@@ -1688,10 +1725,12 @@ function redo(){
   const before = cloneRows();
   const next = redoStack.pop();
   undoStack.push(before);
+  const sigBefore = orderSignature(rows);
   rows = next;
   logActivity('Redo');
   syncRowsDiff(before, rows);
   renderBody();
+  if(orderSignature(rows) !== sigBefore) commitOrder();
   scheduleAutosave();
   updateUndoRedoButtons();
 }
@@ -1750,7 +1789,7 @@ function doAutosave(){
   try{
     const payload = {
       rows: rows.map(r=>({ id:r.id, values:r.values, createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
-      catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, currentUser, skuCounter,
+      catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, productOrder, currentUser, skuCounter,
       categorySubcatsOverride: CATEGORY_SUBCATS,
       materialsOverride: MATERIALS_BY_CATEGORY
     };
@@ -1768,6 +1807,7 @@ function loadState(){
     if(payload.dynamicCategories) dynamicCategories = payload.dynamicCategories;
     if(payload.dynamicStaff) dynamicStaff = payload.dynamicStaff;
     if(Array.isArray(payload.dynamicCollections)) dynamicCollections = payload.dynamicCollections;
+    if(Array.isArray(payload.productOrder)){ productOrder = payload.productOrder.map(String); orderNeedsApply = true; }
     if(payload.currentUser) currentUser = payload.currentUser;
     if(payload.skuCounter) skuCounter = payload.skuCounter;
     if(payload.rows && payload.rows.length){
@@ -2056,8 +2096,130 @@ const FIELD_PLACEHOLDERS = {
   "Regular Price":"0.00"
 };
 
+/* =====================================================================
+   PRODUCT ORDER — staff can arrange products in any order.
+   The order is shared: it's stored in the synced config, so every staff
+   member (desktop and phone) sees the same arrangement. Empty rows always
+   stay at the bottom.
+   ===================================================================== */
+let productOrder = [];          // array of row ids (as strings), shared via app_config
+let orderNeedsApply = false;    // set when a shared order arrives; applied on next render
+let orderSavePending = false;   // our own reorder is being saved — don't let an older copy undo it
+
+function applyProductOrder(){
+  if(!productOrder.length) return;
+  const pos = new Map(productOrder.map((id,i)=>[String(id), i]));
+  const indexed = rows.map((r,i)=>({ r, i, p: pos.has(String(r.id)) ? pos.get(String(r.id)) : Infinity }));
+  indexed.sort((a,b)=> (a.p - b.p) || (a.i - b.i));
+  rows = indexed.map(x=>x.r);
+}
+function commitOrder(){
+  productOrder = rows.filter(rowHasAnyValue).map(r=>String(r.id));
+  orderSavePending = true;
+  scheduleConfigSave();
+  scheduleAutosave();
+}
+function orderSignature(list){ return list.filter(rowHasAnyValue).map(r=>String(r.id)).join(','); }
+
+/* Move a product. insertBefore = position (0..rows.length) it should land in front of. */
+function moveRow(from, insertBefore){
+  if(from < 0 || from >= rows.length) return;
+  insertBefore = Math.max(0, Math.min(rows.length, insertBefore));
+  if(insertBefore === from || insertBefore === from + 1) return;
+  const name = (rows[from].values[IDX["Product Name EN"]] || '').trim() || `product #${from+1}`;
+  const to = insertBefore > from ? insertBefore - 1 : insertBefore;
+  mutateWithHistory(`Moved ${name} to position ${to+1}`, ()=>{
+    const [r] = rows.splice(from, 1);
+    rows.splice(to, 0, r);
+  });
+  commitOrder();
+}
+function moveRowUp(idx){ moveRow(idx, idx - 1); }
+function moveRowDown(idx){ moveRow(idx, idx + 2); }
+
+/* Sort all products by a column. Empty values go last; empty rows stay at the bottom. */
+const SORT_LABELS = {
+  "name-asc":"Name A → Z", "name-desc":"Name Z → A", "sku":"SKU", "category":"Category",
+  "collection":"Collection", "price-asc":"Price: low → high", "price-desc":"Price: high → low",
+  "newest":"Newest first", "oldest":"Oldest first", "completion":"Most complete first"
+};
+function applySort(key){
+  if(!key || !SORT_LABELS[key]) return;
+  const filled = rows.filter(rowHasAnyValue);
+  if(filled.length < 2) return;
+  if(!confirm(`Sort all products by "${SORT_LABELS[key]}"?\n\nThis changes the order for everyone. You can undo it with Ctrl/Cmd+Z.`)) return;
+  const v = (r, f) => (r.values[IDX[f]] || '').toString().trim();
+  const num = (r, f) => { const n = parseFloat(v(r,f)); return isNaN(n) ? null : n; };
+  const txt = (a, b) => (a && !b) ? -1 : (!a && b) ? 1 : a.localeCompare(b, undefined, { numeric:true, sensitivity:'base' });
+  const nums = (a, b, dir) => (a===null && b===null) ? 0 : a===null ? 1 : b===null ? -1 : (a - b) * dir;
+  const cmp = {
+    "name-asc":   (a,b)=> txt(v(a,"Product Name EN"), v(b,"Product Name EN")),
+    "name-desc":  (a,b)=> { const x=v(a,"Product Name EN"), y=v(b,"Product Name EN"); return (x&&!y)?-1:(!x&&y)?1:y.localeCompare(x, undefined, {numeric:true, sensitivity:'base'}); },
+    "sku":        (a,b)=> txt(v(a,"SKU"), v(b,"SKU")),
+    "category":   (a,b)=> txt(v(a,"Main Category"), v(b,"Main Category")) || txt(v(a,"Subcategory"), v(b,"Subcategory")) || txt(v(a,"Product Name EN"), v(b,"Product Name EN")),
+    "collection": (a,b)=> txt(v(a,"Collection"), v(b,"Collection")) || txt(v(a,"Product Name EN"), v(b,"Product Name EN")),
+    "price-asc":  (a,b)=> nums(num(a,"Regular Price"), num(b,"Regular Price"), 1),
+    "price-desc": (a,b)=> nums(num(a,"Regular Price"), num(b,"Regular Price"), -1),
+    "newest":     (a,b)=> (b.createdAt||0) - (a.createdAt||0),
+    "oldest":     (a,b)=> (a.createdAt||0) - (b.createdAt||0),
+    "completion": (a,b)=> rowCompletionPct(b) - rowCompletionPct(a)
+  }[key];
+  mutateWithHistory(`Sorted products by ${SORT_LABELS[key]}`, ()=>{
+    const sorted = filled.map((r,i)=>({r,i})).sort((a,b)=> cmp(a.r,b.r) || (a.i-b.i)).map(x=>x.r);
+    rows = sorted.concat(rows.filter(r=>!rowHasAnyValue(r)));
+  });
+  commitOrder();
+}
+
+/* Desktop: drag a product by its ⠿ handle */
+let dragFromIdx = null;
+function clearDropMarks(){ document.querySelectorAll('#tbody tr.drop-above, #tbody tr.drop-below').forEach(t=>t.classList.remove('drop-above','drop-below')); }
+function setupRowDrag(){
+  const tbody = document.getElementById('tbody');
+  if(!tbody || tbody._dragReady) return;
+  tbody._dragReady = true;
+  tbody.addEventListener('mousedown', e=>{
+    const h = e.target.closest('.drag-handle'); if(!h) return;
+    const tr = h.closest('tr'); if(tr) tr.draggable = true;
+  });
+  document.addEventListener('mouseup', ()=>{ tbody.querySelectorAll('tr[draggable="true"]').forEach(t=>{ if(!t.classList.contains('dragging')) t.draggable=false; }); });
+  tbody.addEventListener('dragstart', e=>{
+    const tr = e.target.closest && e.target.closest('tr'); if(!tr || !tr.draggable) return;
+    dragFromIdx = parseInt(tr.dataset.rowIndex, 10);
+    tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try{ e.dataTransfer.setData('text/plain', String(dragFromIdx)); }catch(_){}
+  });
+  tbody.addEventListener('dragover', e=>{
+    if(dragFromIdx === null) return;
+    const tr = e.target.closest('tr'); if(!tr) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const r = tr.getBoundingClientRect();
+    const below = e.clientY > r.top + r.height/2;
+    clearDropMarks();
+    tr.classList.add(below ? 'drop-below' : 'drop-above');
+  });
+  tbody.addEventListener('drop', e=>{
+    if(dragFromIdx === null) return;
+    const tr = e.target.closest('tr'); if(!tr) return;
+    e.preventDefault();
+    const idx = parseInt(tr.dataset.rowIndex, 10);
+    const below = tr.classList.contains('drop-below');
+    const from = dragFromIdx;
+    dragFromIdx = null; clearDropMarks();
+    moveRow(from, below ? idx + 1 : idx);
+  });
+  tbody.addEventListener('dragend', e=>{
+    dragFromIdx = null; clearDropMarks();
+    tbody.querySelectorAll('tr.dragging').forEach(t=>t.classList.remove('dragging'));
+    tbody.querySelectorAll('tr[draggable="true"]').forEach(t=>t.draggable=false);
+  });
+}
+
 function renderBody(){
+  setupRowDrag();
   closeComboMenu();
+  if(orderNeedsApply){ orderNeedsApply = false; applyProductOrder(); }
   sortEmptyRowsLast();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = "";
@@ -2083,6 +2245,7 @@ function renderBody(){
       <span class="rowtop">
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
         <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${rIdx+1}
+        ${rowStarted ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
       </span>
       <span class="rowbtns">
         <button class="icon eye" title="Quick preview" onclick="openPreview(${rIdx})">👁</button>
@@ -2347,8 +2510,14 @@ function renderBody(){
         </div>
       </div>
       <div class="mcard-actions" onclick="event.stopPropagation()">
-        <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
-        <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
+        ${rowStarted ? `<div class="mcard-move">
+          <button class="icon" title="Move up" onclick="moveRowUp(${rIdx})" ${rIdx===0?'disabled':''}>↑</button>
+          <button class="icon" title="Move down" onclick="moveRowDown(${rIdx})" ${(rIdx+1>=rows.length || !rowHasAnyValue(rows[rIdx+1]))?'disabled':''}>↓</button>
+        </div>` : ``}
+        <div class="mcard-move">
+          <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
+          <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
+        </div>
       </div>`;
     mobileCards.appendChild(card);
   });
