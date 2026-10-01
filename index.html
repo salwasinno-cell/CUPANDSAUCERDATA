@@ -635,6 +635,32 @@
   @media (max-width:860px){
     .btn-fullscreen, .sheet-fs-corner{display:none !important;}   /* phones use product cards, not the table */
   }
+
+  /* =====================================================================
+     ROW HEIGHT FOLLOWS THE PHOTO SIZE
+     ===================================================================== */
+  #tbody td{padding-top:7px !important;padding-bottom:7px !important;}
+  #tbody td:has(.image-cell){padding-top:7px !important;padding-bottom:7px !important;}
+  .rowno{padding-top:6px !important;padding-bottom:6px !important;vertical-align:top;}
+  .img-thumb svg{width:min(26px, 52%);height:auto;}
+  .row-more{display:none;width:20px;height:20px;padding:0;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--brass-dim);font-size:15px;line-height:1;cursor:pointer;align-items:center;justify-content:center;}
+  .row-more:hover{border-color:var(--hairline-strong);background:var(--white);color:var(--ink);}
+  body.rows-compact .row-more{display:inline-flex;}
+  body.rows-compact .rowno .rowbtns{display:none !important;}
+  body.rows-compact .rowno .rowtop{margin-bottom:0;gap:4px;}
+  body.rows-compact .rowno{min-width:112px;}
+  .row-menu{min-width:240px;}
+  .row-menu button{display:flex;align-items:center;gap:6px;}
+  .row-menu button svg{flex-shrink:0;}
+  .row-menu button[disabled]{opacity:0.4;cursor:default;background:transparent;}
+  /* Small: a little tighter so the photo row matches a normal field row */
+  body.rows-small .image-cell .img-remove{width:15px;height:15px;font-size:8px;}
+  body.rows-small .img-thumb{border-radius:5px;}
+  .img-thumb img{display:block;width:100%;height:100%;object-fit:cover;}
+  .image-cell{vertical-align:top;line-height:0;}
+  .image-cell .img-remove{top:3px !important;left:auto !important;right:3px;}
+  body.rows-small .image-cell .img-remove{top:2px !important;right:2px;}
+  @media (min-width:861px){ .toolbar{gap:6px;} .toolbar > button, .toolbar > .more-wrap > button, .toolbar > select{padding-left:12px;padding-right:12px;} .toolbar-select{padding-right:28px;} }
 </style>
 </head>
 <body>
@@ -811,7 +837,6 @@
   <span class="legend">
     <span><span class="swatch" style="background:var(--danger-light);border:1px solid var(--danger)"></span>Missing / duplicate</span>
     <span><span class="swatch" style="background:var(--warn-light);border:1px solid var(--warn)"></span>Invalid value</span>
-    <span><span class="swatch" style="background:#F1EFE8;border:1px solid var(--hairline-strong)"></span>Not applicable</span>
   </span>
 </footer>
 
@@ -1379,16 +1404,54 @@ const UPLOAD_ICON = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none"
 /* ---- Product photo thumbnail size control (personal display preference, this browser only) ---- */
 const GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
 const THUMB_SIZES = [
-  { label:'Small',   px:34  },
+  { label:'Small',   px:38  },
   { label:'Medium',  px:56  },
   { label:'Large',   px:84  },
   { label:'X-Large', px:120 },
 ];
 function getThumbSize(){
-  return parseInt(localStorage.getItem('cs_pde_thumb_size'), 10) || 84; // 84 = Large, the new default
+  const v = parseInt(localStorage.getItem('cs_pde_thumb_size'), 10) || 84; // 84 = Large, the default
+  return v === 34 ? 38 : v;   // old Small (34) → new Small (38 = same height as a field)
 }
+/* Row height follows the photo size: Medium / Large / X-Large rows are exactly as tall as the
+   photo; Small rows are as compact as any other field. When a row is shorter than the row
+   buttons need, those buttons move into a "⋯" menu so no empty space is left. */
+const ROW_BUTTONS_MIN_THUMB = 84;   // the icon grid needs ~70px; below Large it goes into the ⋯ menu
 function applyThumbSize(){
-  document.documentElement.style.setProperty('--thumb-size', getThumbSize() + 'px');
+  const px = getThumbSize();
+  document.documentElement.style.setProperty('--thumb-size', px + 'px');
+  document.body.classList.toggle('rows-compact', px < ROW_BUTTONS_MIN_THUMB);
+  document.body.classList.toggle('rows-small', px <= 40);
+  requestAnimationFrame(()=>{ try{ autoGrowAll(document.getElementById('tbody')); }catch(e){} });
+}
+/* Row actions menu (used when the row is compact) */
+function openRowMenu(e, rIdx){
+  e.stopPropagation();
+  let m = document.getElementById('rowMenu');
+  if(!m){
+    m = document.createElement('div'); m.id = 'rowMenu'; m.className = 'more-menu row-menu';
+    document.body.appendChild(m);
+    document.addEventListener('click', ev => { if(!ev.target.closest('#rowMenu') && !ev.target.closest('.row-more')) m.classList.remove('show'); });
+    window.addEventListener('scroll', ()=>m.classList.remove('show'), true);
+  }
+  if(m.classList.contains('show') && m.dataset.row === String(rIdx)){ m.classList.remove('show'); return; }
+  const row = rows[rIdx]; const started = rowHasAnyValue(row);
+  const item = (label, fn, cls='', dis=false) => `<button type="button" class="${cls}" ${dis?'disabled':''} onclick="document.getElementById('rowMenu').classList.remove('show'); ${fn}">${label}</button>`;
+  m.innerHTML =
+    item('👁&nbsp; Quick preview', `openPreview(${rIdx})`) +
+    item('⤢&nbsp; Open in Focused Mode', `openFocusedMode(${rIdx})`) +
+    item('⇧&nbsp; Copy values from row above', `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
+    item('⧉&nbsp; Duplicate product', `duplicateRow(${rIdx})`) +
+    (started ? item(COPY_ICON + '&nbsp; Copy data (without photo)', `copyRowData(${rIdx})`) : '') +
+    (copiedRowValues ? item(PASTE_ICON + '&nbsp; Paste copied data here', `pasteRowData(${rIdx})`) : '') +
+    '<div class="more-sep"></div>' +
+    item('✕&nbsp; Delete row', `deleteRow(${rIdx})`, 'danger');
+  m.dataset.row = String(rIdx);
+  m.classList.add('show');
+  const r = e.currentTarget.getBoundingClientRect();
+  const h = m.offsetHeight, w = m.offsetWidth;
+  m.style.left = Math.min(r.left, window.innerWidth - w - 8) + 'px';
+  m.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
 }
 function renderThumbSizeMenu(){
   const menu = document.getElementById('imgSizeMenu');
@@ -2622,6 +2685,7 @@ function renderBody(){
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
         <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${rowStarted ? posInputHTML(rIdx) : `<span class="pos-num">${rIdx+1}</span>`}
         ${rowStarted ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
+        <button type="button" class="row-more" title="Row actions" onclick="openRowMenu(event, ${rIdx})">⋯</button>
       </span>
       <span class="rowbtns">
         <button class="icon eye" title="Quick preview" onclick="openPreview(${rIdx})">👁</button>
