@@ -126,6 +126,31 @@ create policy "anyone with anon key updates product images" on storage.objects
 create policy "anyone with anon key deletes product images" on storage.objects
   for delete using (bucket_id = 'product-images');
 
+-- ----------------------------------------------------------------------------
+-- 7. PRODUCT ORDER — each product's position in the list (same on all devices)
+-- ----------------------------------------------------------------------------
+-- 1. Each product remembers its position in the list
+alter table products add column if not exists sort_order double precision;
+create index if not exists products_sort_order_idx on products (sort_order);
+
+-- 2. Save a whole new order in a single request (used when dragging or sorting)
+create or replace function set_product_order(p_ids bigint[], p_orders double precision[])
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update products p
+     set sort_order = u.ord
+    from unnest(p_ids, p_orders) as u(id, ord)
+   where p.id = u.id;
+$$;
+
+grant execute on function set_product_order(bigint[], double precision[]) to anon, authenticated;
+
+-- 3. Make the new column visible to the app right away
+notify pgrst, 'reload schema';
+
 -- ============================================================================
 -- Done. No staff accounts to create — just paste your Project URL + anon
 -- public key into the HTML file (near the top of the <script> section) and

@@ -111,3 +111,10 @@ common tradeoff — just going in with eyes open about what it means.
   exact same product within the same second, the later save wins. For a
   small internal team entering distinct products this essentially never
   comes up in practice.
+
+
+## Update: saving the product order (one-time)
+Product order (drag ⠿ on desktop, ↑/↓ on phone, "Sort by…") is saved on each product so every
+device shows the same order. If you set up the database before this update, run
+`supabase-add-ordering.sql` once in Supabase → SQL Editor → New query → Run, then reload the page.
+New setups get this automatically from `supabase-setup.sql`.

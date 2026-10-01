@@ -510,6 +510,95 @@
   @media (max-width:860px){ .mcard-actions{flex-direction:row !important;} }
   .mcard-actions .icon[disabled]{opacity:0.3;cursor:default;}
   @media (max-width:860px){ .toolbar-select{flex-shrink:0;min-height:40px;font-size:12.5px;} }
+  .order-notice{margin:0 32px 14px;padding:12px 16px;background:var(--warn-light);border:1px solid #E3C38C;border-radius:8px;font-size:13px;color:var(--ink);line-height:1.5;}
+  .order-notice code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px;font-size:12px;}
+  .order-notice button{margin-left:10px;border:1px solid var(--hairline-strong);background:var(--white);border-radius:4px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;}
+  @media (max-width:860px){ .order-notice{margin:0 16px 12px;} }
+  /* editable position number */
+  .pos-input{width:36px;height:22px;padding:0 3px;border:1px solid transparent;border-radius:4px;background:transparent;text-align:center;font:inherit;font-size:11.5px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;cursor:text;}
+  .pos-input:hover{border-color:var(--hairline-strong);background:var(--white);}
+  .pos-input:focus{outline:none;border-color:var(--brass);background:var(--white);box-shadow:0 0 0 2px rgba(199,167,100,0.2);}
+  .pos-num{display:inline-block;min-width:36px;text-align:center;}
+  .pos-input.mpos{display:block;margin-top:8px;width:34px;height:28px;font-size:12px;border-color:var(--hairline-strong);background:var(--white);border-radius:6px;}
+  #tbody tr.just-moved td{animation:justMoved 1.6s ease;}
+  .mcard.just-moved{animation:justMovedCard 1.6s ease;}
+  @keyframes justMoved{0%,40%{background-color:#F3E6C4 !important;}100%{}}
+  @keyframes justMovedCard{0%,40%{box-shadow:0 0 0 2px var(--brass);}100%{}}
+  /* copy / paste product data */
+  .rowbtns-copy{margin-top:4px;min-height:0;}
+  .icon.copyrow, .icon.pasterow{color:var(--brass-dim);display:inline-flex;align-items:center;justify-content:center;}
+  .icon.pasterow{color:#2E7D5B;}
+  .mcard-actions .icon.copyrow svg, .mcard-actions .icon.pasterow svg{width:15px;height:15px;}
+  .app-toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#F4F1E8;padding:11px 18px;border-radius:8px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,0.25);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:600;max-width:calc(100vw - 32px);text-align:center;}
+  .app-toast.show{opacity:1;transform:translate(-50%,0);}
+  .btn-export{border-color:var(--brass-dim);color:var(--brass-light);}
+  .btn-export:hover{background:rgba(199,167,100,0.12);}
+
+  /* =====================================================================
+     POLISH PASS
+     ===================================================================== */
+  /* toolbar "More" menu */
+  .more-wrap{position:relative;display:inline-flex;}
+  .more-menu{position:fixed;z-index:520;display:none;min-width:190px;background:var(--white);border:1px solid var(--hairline-strong);border-radius:8px;box-shadow:0 12px 32px rgba(27,28,31,0.18);padding:5px;}
+  .more-menu.show{display:block;}
+  .more-menu button{display:block;width:100%;text-align:left;background:transparent;border:none;border-radius:5px;padding:9px 12px;color:var(--ink);font-size:13px;}
+  .more-menu button:hover{background:var(--brass-light);}
+  .more-menu button.danger{color:var(--danger);}
+  .more-menu button.danger:hover{background:#FBF1EF;}
+  .more-sep{height:1px;background:var(--hairline);margin:4px 6px;}
+
+  /* row number column: tidy 4-column icon grid */
+  .rowno .rowbtns{display:grid !important;grid-template-columns:repeat(4, 18px);gap:4px 5px;justify-content:center;margin-top:6px;}
+  .rowno .rowbtns:empty{display:none !important;}
+  .rowno .rowbtns + .rowbtns{margin-top:4px;}
+  .rowno .rowbtns .icon{width:18px;height:18px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;}
+
+  /* section labels stay readable while scrolling sideways */
+  thead tr.group th > span, thead tr.group th{white-space:nowrap;}
+  thead tr.group th .group-label{position:sticky;left:116px;display:inline-block;}
+
+  /* filter panel controls match the sheet */
+  .filter-field select, .filter-field input[type=text]{height:36px;padding:0 34px 0 11px;font-size:13px;border:1px solid var(--hairline-strong);border-radius:6px;background-color:var(--white);color:var(--ink);min-width:150px;-webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23B08F52' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;background-size:12px;cursor:pointer;}
+  .filter-field input[type=text]{background-image:none;padding-right:11px;cursor:text;}
+  .filter-field select:focus, .filter-field input[type=text]:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(199,167,100,0.18);}
+  .filter-field.checkish{margin-top:20px;}
+
+  /* closed side drawers must not cast a shadow onto the page */
+  .drawer{box-shadow:none;visibility:hidden;transition:transform 0.25s ease, visibility 0s linear 0.25s;}
+  .drawer.show{box-shadow:-10px 0 30px rgba(0,0,0,0.2);visibility:visible;transition:transform 0.25s ease, visibility 0s;}
+
+  /* Manage Lists */
+  .chips-empty{font-size:12px;color:var(--ink-soft);font-style:italic;}
+  .manage-section-title{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-soft);margin:22px 2px 10px;}
+  .chip-input{min-width:260px;}
+
+  /* review note */
+  .review-warning{font-size:13px !important;color:var(--danger);background:#FBF1EF;border:1px solid #EBCFC9;border-radius:6px;padding:10px 14px;max-width:412px;}
+
+  /* phone: product cards — actions in a tidy bar under the card */
+  @media (max-width:860px){
+    .stats{align-items:flex-start !important;}
+    .stats .lbl{white-space:nowrap;}
+    .mcard{flex-wrap:wrap;}
+    .mcard-body{flex:1 1 0;min-width:0;}
+    .mcard-actions{order:10;flex:0 0 100%;flex-direction:row !important;justify-content:flex-end;gap:6px;border-top:1px solid var(--hairline);padding-top:10px;margin-top:2px;}
+    .mcard-actions .mcard-move{flex-direction:row;gap:6px;}
+    .mcard-actions .mcard-move-ud{margin-right:auto;}
+    .mcard-actions .icon{width:36px !important;height:34px !important;padding:0 !important;font-size:14px !important;}
+    .mcard-actions .icon svg{width:15px;height:15px;}
+    .more-menu button{padding:12px 14px;font-size:14px;}
+  }
+  .search-bar{max-width:1700px;margin:0 auto;padding:2px 32px 12px;}
+  .search-bar .filter-row{margin-left:0;gap:16px;}
+  .search-bar .search-box{min-width:320px;height:38px;padding:0 14px;border:1px solid var(--hairline-strong);border-radius:6px;background:var(--white);font:inherit;font-size:13px;}
+  .search-bar .search-box:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(199,167,100,0.18);}
+  @media (max-width:860px){
+    .search-bar{padding:0 16px 10px;}
+    .search-bar .search-box{min-width:0;width:100%;height:42px;font-size:16px;}
+    .search-bar .filter-row{flex-direction:row !important;flex-wrap:wrap;gap:8px 16px;}
+    .search-bar .filter-row .search-box{flex:0 0 100%;}
+  }
 </style>
 </head>
 <body>
@@ -555,10 +644,17 @@
         <option value="completion">Most complete first</option>
       </select>
       <button class="btn-ghost" onclick="openImportModal()">Import CSV</button>
+      <button class="btn-ghost btn-export" onclick="exportCSV()" title="Download all products (or only the selected ones) as a CSV file">⬇ Export CSV</button>
       <button class="btn-ghost" onclick="openManageModal()">Manage Lists</button>
-      <button class="btn-ghost" onclick="copyAsCSV()">Copy as CSV</button>
-      <button class="btn-ghost" onclick="copyAsJSON()">Copy as JSON</button>
-      <button class="btn-danger-ghost" onclick="openClearSheetModal()">Clear Sheet</button>
+      <div class="more-wrap">
+        <button class="btn-ghost more-btn" type="button" onclick="toggleMoreMenu(event)" aria-haspopup="true">More ▾</button>
+        <div class="more-menu" id="moreMenu" role="menu">
+          <button type="button" onclick="closeMoreMenu(); copyAsCSV(event)">Copy all as CSV</button>
+          <button type="button" onclick="closeMoreMenu(); copyAsJSON(event)">Copy all as JSON</button>
+          <div class="more-sep"></div>
+          <button type="button" class="danger" onclick="closeMoreMenu(); openClearSheetModal()">Clear sheet…</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -574,11 +670,13 @@
   <div class="stat"><div class="num" id="statReady">0</div><div class="lbl">Ready to Publish</div></div>
   <div class="stat"><div class="num" id="statAvgCompletion">0%</div><div class="lbl">Avg. Completion</div></div>
 
+</div>
+<div class="search-bar">
   <div class="filter-row">
-    <input class="search-box" id="searchBox" type="text" placeholder="Search products…" oninput="applyFilters()">
+    <input class="search-box" id="searchBox" type="search" placeholder="Search by name, SKU, brand, category…" oninput="applyFilters()">
     <label><input type="checkbox" id="onlyIncomplete" onchange="applyFilters()"> Missing required</label>
     <label><input type="checkbox" id="onlyDupes" onchange="applyFilters()"> Duplicates</label>
-    <label><input type="checkbox" id="onlyInvalid" onchange="applyFilters()"> Invalid</label>
+    <label><input type="checkbox" id="onlyInvalid" onchange="applyFilters()"> Invalid values</label>
   </div>
 </div>
 
@@ -659,7 +757,7 @@
 
 <footer class="note">
   <span class="dot"></span>
-  <span class="note-desktop">Arrow keys/Enter/Tab move between cells. Hover a cell's bottom-right corner to fill it down. Drag ⠿ to reorder products. Ctrl/Cmd+Z to undo.</span>
+  <span class="note-desktop">Arrow keys/Enter/Tab move between cells. Hover a cell's bottom-right corner to fill it down. Drag ⠿ or type a new number in # to reorder products. Ctrl/Cmd+Z to undo.</span>
   <span class="note-mobile">Tap a product card to open it in Focused Mode for editing.</span>
   <span class="legend">
     <span><span class="swatch" style="background:var(--danger-light);border:1px solid var(--danger)"></span>Missing / duplicate</span>
@@ -706,7 +804,7 @@
 <!-- Manage lists modal -->
 <div class="modal-overlay hidden" id="manageModal">
   <div class="modal-panel">
-    <div class="modal-header"><h2>Manage Categories, Subcategories &amp; Materials</h2><button onclick="closeManageModal()">✕</button></div>
+    <div class="modal-header"><h2>Manage Lists</h2><button onclick="closeManageModal()">✕</button></div>
     <div class="modal-body" id="manageBody"></div>
     <div class="modal-footer">
       <input id="newCatInput" placeholder="New category name" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewCategoryFromModal();}">
@@ -840,7 +938,7 @@ const schema = [
     { name:"Product Name AR", type:"text", required:true, rtl:true },
     { name:"SKU", type:"text", required:true, dupeCheck:true },
     { name:"Barcode / EAN / UPC", type:"text", dupeCheck:true },
-    { name:"Brand", type:"text" },
+    { name:"Brand", type:"combo", options: [] },
   ]},
   { section: "Classification", fields: [
     { name:"Main Category", type:"combo-category", required:true },
@@ -850,7 +948,7 @@ const schema = [
   { section: "Product Details", fields: [
     { name:"Description EN", type:"text", required:true },
     { name:"Description AR", type:"text", required:true, rtl:true },
-    { name:"Color", type:"combo", options: COLORS },
+    { name:"Color", type:"combo", options: [] },
     { name:"Material", type:"combo-material" },
     { name:"Pieces Number", type:"number" },
     { name:"Suitable For / Persons", type:"number" },
@@ -863,7 +961,7 @@ const schema = [
     { name:"Height", type:"number", unit:"cm", headerUnit:"cm" },
     { name:"Depth", type:"number", unit:"cm", headerUnit:"cm" },
     { name:"Diameter", type:"number", unit:"cm", headerUnit:"cm" },
-    { name:"Capacity", type:"number", dynamicUnit:true, headerUnit:"mL" },
+    { name:"Capacity", type:"number", dynamicUnit:true, headerUnit:"ml" },
   ]},
   { section: "Pricing", fields: [
     { name:"Regular Price", type:"number", required:true, min:0.01, headerUnit:"$" },
@@ -964,7 +1062,8 @@ function toProductRecord(row){
     created_by: row.createdBy || currentUser || 'Unassigned',
     updated_at: new Date(row.lastEditedAt || Date.now()).toISOString(),
     updated_by: row.lastEditedBy || currentUser || 'Unassigned',
-    history: (row.history || []).slice(-20)
+    history: (row.history || []).slice(-20),
+    ...(HAS_SORT_COLUMN ? { sort_order: (row.sortOrder === null || row.sortOrder === undefined) ? null : row.sortOrder } : {})
   };
 }
 /* ---- Live save: text is saved ~0.7s after you stop typing (not only when you
@@ -986,7 +1085,7 @@ function flushLiveSave(id){
   persistRow(row);
   scheduleAutosave();
 }
-function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); try{ doAutosave(); }catch(e){} }
+function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); try{ doAutosave(); }catch(e){} if(configSaveTimer){ clearTimeout(configSaveTimer); persistConfig(); } }
 window.addEventListener('pagehide', flushAllLiveSaves);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'hidden') flushAllLiveSaves(); });
 
@@ -1019,6 +1118,7 @@ async function persistDeleteRowsBatch(ids){
   if(error) console.error('Batch delete error', error);
 }
 function syncRowsDiff(beforeRows, afterRows){
+  try{ const bm = new Map(beforeRows.map(r=>[r.id,r])); afterRows.forEach(r=>{ const b=bm.get(r.id); if(!b || JSON.stringify(b.values)!==JSON.stringify(r.values)) learnRowOptions(r); }); }catch(e){ console.warn(e); }
   const beforeMap = new Map(beforeRows.map(r=>[r.id,r]));
   const afterMap = new Map(afterRows.map(r=>[r.id,r]));
   const changed = [];
@@ -1028,6 +1128,14 @@ function syncRowsDiff(beforeRows, afterRows){
   });
   const deletedIds = [];
   beforeMap.forEach((r,id)=>{ if(!afterMap.has(id)) deletedIds.push(id); });
+  // rows whose position changed but whose content didn't → save just the position
+  const changedIds = new Set(changed.map(r=>r.id));
+  const moved = [];
+  afterMap.forEach((r,id)=>{
+    const b = beforeMap.get(id);
+    if(b && !changedIds.has(id) && (b.sortOrder ?? null) !== (r.sortOrder ?? null)) moved.push(r);
+  });
+  if(moved.length) persistOrder(moved);
   if(changed.length === 1 && !deletedIds.length){ persistRow(changed[0]); return; }
   if(changed.length) persistRowsBatch(changed);
   if(deletedIds.length) persistDeleteRowsBatch(deletedIds);
@@ -1040,7 +1148,7 @@ function scheduleConfigSave(){
   configSaveTimer = setTimeout(persistConfig, 600);
 }
 async function persistConfig(){
-  const data = { catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
+  const data = { catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
   const { error } = await sb.from('app_config').update({ data, updated_at: new Date().toISOString() }).eq('id', 1);
   if(error) console.error('Config sync error', error);
   else orderSavePending = false;
@@ -1074,7 +1182,9 @@ function applyConfig(data){
   }
   if(data.dynamicStaff) dynamicStaff = data.dynamicStaff;
   if(Array.isArray(data.dynamicCollections)) dynamicCollections = data.dynamicCollections;
-  if(Array.isArray(data.productOrder) && !orderSavePending){
+  if(data.customOptions && typeof data.customOptions === 'object') customOptions = data.customOptions;
+  seedColorList();
+  if(!HAS_SORT_COLUMN && Array.isArray(data.productOrder) && !orderSavePending){
     const changed = data.productOrder.join(',') !== productOrder.join(',');
     productOrder = data.productOrder.map(String);
     if(changed) orderNeedsApply = true;
@@ -1115,8 +1225,16 @@ function deleteProductImageByUrl(url){
 async function fetchAllData(){
   const { data: productRows, error: prodErr } = await sb.from('products').select('*').order('created_at', { ascending:true });
   if(prodErr){ console.error(prodErr); return false; }
+  if(productRows && productRows.length){
+    HAS_SORT_COLUMN = Object.prototype.hasOwnProperty.call(productRows[0], 'sort_order');
+  } else {
+    const probe = await sb.from('products').select('sort_order').limit(1);
+    HAS_SORT_COLUMN = !probe.error;
+  }
+  showOrderSetupNotice(!HAS_SORT_COLUMN);
   rows = (productRows||[]).map(r => ({
     id: r.id,
+    sortOrder: (r.sort_order === null || r.sort_order === undefined) ? null : Number(r.sort_order),
     values: normalizeRowValues(r.values),
     createdAt: new Date(r.created_at).getTime(),
     createdBy: r.created_by,
@@ -1151,17 +1269,28 @@ function applyRemoteRowChange(payload){
   }
   const r = payload.new;
   const incoming = {
-    id: r.id, values: normalizeRowValues(r.values),
+    id: r.id, sortOrder: (r.sort_order === null || r.sort_order === undefined) ? null : Number(r.sort_order),
+    values: normalizeRowValues(r.values),
     createdAt: new Date(r.created_at).getTime(), createdBy: r.created_by,
     lastEditedAt: new Date(r.updated_at).getTime(), lastEditedBy: r.updated_by,
     history: r.history || []
   };
   const idx = rows.findIndex(row=>row.id===incoming.id);
   if(idx===-1){ rows.push(incoming); }
-  else if(incoming.lastEditedAt >= (rows[idx].lastEditedAt||0)){ rows[idx] = incoming; }
-  else { return; }
+  else if(incoming.lastEditedAt >= (rows[idx].lastEditedAt||0)){
+    const onlyMoved = JSON.stringify(rows[idx].values) === JSON.stringify(incoming.values);
+    rows[idx] = incoming;
+    if(onlyMoved){ scheduleRender(); return; }   // a reorder touches many rows — redraw once
+  }
+  else {
+    // our copy of the content is newer, but the position still comes from the server
+    if(HAS_SORT_COLUMN && incoming.sortOrder !== (rows[idx].sortOrder ?? null)){ rows[idx].sortOrder = incoming.sortOrder; scheduleRender(); }
+    return;
+  }
   renderBody();
 }
+let renderTimer = null;
+function scheduleRender(){ clearTimeout(renderTimer); renderTimer = setTimeout(renderBody, 120); }
 function startRealtime(){
   if(realtimeChannel) return;
   realtimeChannel = sb.channel('products-sync')
@@ -1472,7 +1601,7 @@ function composeProductDescription(row){
   // --- Detail sentence: dimensions / capacity / pieces / persons, only if present ---
   const detailParts = [];
   dims.forEach(d => detailParts.push(`a ${d.label.toLowerCase()} of ${d.val} cm`));
-  if(capacity) detailParts.push(`a generous capacity of ${capacity} mL`);
+  if(capacity) detailParts.push(`a generous capacity of ${capacity} ml`);
   if(pieces) detailParts.push(`a set of ${pieces} piece${pieces==='1'?'':'s'}`);
   if(persons) detailParts.push(`comfortable use for ${persons} ${persons==='1'?'person':'people'}`);
   let detailSentence = '';
@@ -1532,7 +1661,7 @@ function addCategoryIfNew(val){
   if(!dynamicCategories.some(c=>c.toLowerCase()===v.toLowerCase())){ dynamicCategories.push(v); scheduleConfigSave(); }
 }
 function cloneRows(){
-  return rows.map(r => ({ id:r.id, values:r.values.slice(), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
+  return rows.map(r => ({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:r.values.slice(), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
 }
 
 function addRow(){ mutateWithHistory('Added a new product row', ()=>{ rows.push(newRow()); }); }
@@ -1574,6 +1703,7 @@ function duplicateRow(idx){
     if(IDX["SKU"]>-1) copy.values[IDX["SKU"]] = "";
     if(IDX["Barcode / EAN / UPC"]>-1) copy.values[IDX["Barcode / EAN / UPC"]] = "";
     rows.splice(idx+1, 0, copy);
+    renumberOrder();
   });
   commitOrder();
 }
@@ -1788,8 +1918,8 @@ function scheduleAutosave(){
 function doAutosave(){
   try{
     const payload = {
-      rows: rows.map(r=>({ id:r.id, values:r.values, createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
-      catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, productOrder, currentUser, skuCounter,
+      rows: rows.map(r=>({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:r.values, createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
+      catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, currentUser, skuCounter,
       categorySubcatsOverride: CATEGORY_SUBCATS,
       materialsOverride: MATERIALS_BY_CATEGORY
     };
@@ -1807,11 +1937,12 @@ function loadState(){
     if(payload.dynamicCategories) dynamicCategories = payload.dynamicCategories;
     if(payload.dynamicStaff) dynamicStaff = payload.dynamicStaff;
     if(Array.isArray(payload.dynamicCollections)) dynamicCollections = payload.dynamicCollections;
+    if(payload.customOptions && typeof payload.customOptions === 'object') customOptions = payload.customOptions;
     if(Array.isArray(payload.productOrder)){ productOrder = payload.productOrder.map(String); orderNeedsApply = true; }
     if(payload.currentUser) currentUser = payload.currentUser;
     if(payload.skuCounter) skuCounter = payload.skuCounter;
     if(payload.rows && payload.rows.length){
-      rows = payload.rows.map(r=>({ id:r.id, values:normalizeRowValues(r.values), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
+      rows = payload.rows.map(r=>({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:normalizeRowValues(r.values), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
     }
     return true;
   }catch(e){ return false; }
@@ -1828,7 +1959,8 @@ function buildHead(){
   schema.forEach(g => {
     const th = document.createElement('th');
     th.colSpan = g.fields.length;
-    th.textContent = g.section;
+    const lab = document.createElement('span'); lab.className = 'group-label'; lab.textContent = g.section;
+    th.appendChild(lab);
     groupRow.appendChild(th);
   });
   const fieldRow = document.createElement('tr');
@@ -1934,6 +2066,8 @@ document.addEventListener('keydown', e=>{
    Also re-points Focused Mode at the same product if its position changed. ---- */
 function sortEmptyRowsLast(){
   const focusedId = rows[focusedRowIdx] ? rows[focusedRowIdx].id : null;
+  if(HAS_SORT_COLUMN) sortRowsByPosition();
+  else if(orderNeedsApply){ orderNeedsApply = false; applyProductOrder(); }
   const filled = [], empty = [];
   rows.forEach(r => (rowHasAnyValue(r) ? filled : empty).push(r));
   rows = filled.concat(empty);
@@ -2102,7 +2236,8 @@ const FIELD_PLACEHOLDERS = {
    member (desktop and phone) sees the same arrangement. Empty rows always
    stay at the bottom.
    ===================================================================== */
-let productOrder = [];          // array of row ids (as strings), shared via app_config
+let HAS_SORT_COLUMN = false;    // true once the products table has the sort_order column (see supabase-add-ordering.sql)
+let productOrder = [];          // fallback only (older databases): array of row ids kept in app_config
 let orderNeedsApply = false;    // set when a shared order arrives; applied on next render
 let orderSavePending = false;   // our own reorder is being saved — don't let an older copy undo it
 
@@ -2113,11 +2248,53 @@ function applyProductOrder(){
   indexed.sort((a,b)=> (a.p - b.p) || (a.i - b.i));
   rows = indexed.map(x=>x.r);
 }
+/* Give every filled product its position number, in the current on-screen order. */
+function renumberOrder(){
+  let n = 0;
+  rows.forEach(r=>{ if(rowHasAnyValue(r)){ n += 1; r.sortOrder = n; } });
+}
+/* Sort rows by their saved position (stable; products without one keep their place after the rest) */
+function sortRowsByPosition(){
+  const indexed = rows.map((r,i)=>({ r, i, p: (typeof r.sortOrder === 'number' && isFinite(r.sortOrder)) ? r.sortOrder : Infinity }));
+  indexed.sort((a,b)=> (a.p - b.p) || (a.i - b.i));
+  rows = indexed.map(x=>x.r);
+}
+/* Save positions to the database: one request for any number of products. */
+async function persistOrder(list){
+  if(!HAS_SORT_COLUMN || !list.length || SUPABASE_NOT_CONFIGURED) return;
+  setSaveStatus('Saving order…');
+  const ids = list.map(r=>r.id), orders = list.map(r=>r.sortOrder ?? null);
+  let { error } = await sb.rpc('set_product_order', { p_ids: ids, p_orders: orders });
+  if(error){
+    // function not installed yet → update rows one by one (still saved, just more requests)
+    console.warn('set_product_order unavailable, using per-row updates', error);
+    const results = await Promise.all(list.map(r => sb.from('products').update({ sort_order: r.sortOrder ?? null }).eq('id', r.id)));
+    error = (results.find(x=>x.error) || {}).error || null;
+  }
+  if(error){ console.error('Order save error', error); setSaveStatus('Order not saved — check connection'); return; }
+  setSaveStatus('Order saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+}
+/* Called after any reorder. With the new column, the positions were already saved by the
+   normal change-sync; on older databases fall back to the shared config list. */
 function commitOrder(){
+  if(HAS_SORT_COLUMN) return;
   productOrder = rows.filter(rowHasAnyValue).map(r=>String(r.id));
   orderSavePending = true;
   scheduleConfigSave();
   scheduleAutosave();
+}
+function showOrderSetupNotice(show){
+  let el = document.getElementById('orderSetupNotice');
+  if(!show){ if(el) el.remove(); return; }
+  if(el) return;
+  el = document.createElement('div');
+  el.id = 'orderSetupNotice';
+  el.className = 'order-notice';
+  el.innerHTML = `<b>One-time database update needed to save product order on all devices.</b>
+    In Supabase → SQL Editor, run the file <code>supabase-add-ordering.sql</code> (included in the zip), then reload this page.
+    <button type="button" onclick="this.parentNode.remove()">Dismiss</button>`;
+  const anchor = document.querySelector('.queue-bar') || document.body.firstChild;
+  anchor.parentNode.insertBefore(el, anchor);
 }
 function orderSignature(list){ return list.filter(rowHasAnyValue).map(r=>String(r.id)).join(','); }
 
@@ -2131,10 +2308,158 @@ function moveRow(from, insertBefore){
   mutateWithHistory(`Moved ${name} to position ${to+1}`, ()=>{
     const [r] = rows.splice(from, 1);
     rows.splice(to, 0, r);
+    renumberOrder();
   });
   commitOrder();
 }
+/* =====================================================================
+   LEARNED OPTIONS — anything typed into a dropdown field (Color, Brand,
+   Material, Subcategory, Category, Collection, Review Status, Assigned To…)
+   is added to that field's options for everyone, automatically.
+   ===================================================================== */
+let customOptions = {};   // { "Color": [...], "Brand": [...] } — shared via app_config
+/* The colour list starts with the standard colours and is then fully editable in Manage Lists */
+function seedColorList(){
+  if(!Array.isArray(customOptions.Color)) customOptions.Color = [];
+  if(!customOptions._colorsSeeded){
+    COLORS.forEach(c => { if(!customOptions.Color.some(x=>x.toLowerCase()===c.toLowerCase())) customOptions.Color.unshift(c); });
+    customOptions.Color.sort((a,b)=> COLORS.indexOf(a) === -1 ? 1 : COLORS.indexOf(b) === -1 ? -1 : COLORS.indexOf(a)-COLORS.indexOf(b));
+    customOptions._colorsSeeded = true;
+  }
+}
+seedColorList();
+const COMBO_TYPES = ["combo","combo-sub","combo-material","combo-category","combo-staff","combo-collection"];
+function hasOpt(list, v){ return (list||[]).some(x => String(x).toLowerCase() === v.toLowerCase()); }
+function optionsFor(f, row){
+  const cat = row ? row.values[IDX["Main Category"]] : "";
+  let base = [];
+  if(f.type === "combo") base = (f.options || []);
+  if(f.type === "combo-sub") base = CATEGORY_SUBCATS[cat] || [];
+  if(f.type === "combo-material") base = MATERIALS_BY_CATEGORY[cat] || MATERIALS_DEFAULT;
+  if(f.type === "combo-category") base = dynamicCategories;
+  if(f.type === "combo-staff") base = dynamicStaff;
+  if(f.type === "combo-collection") base = allCollections();
+  const extra = (f.type === "combo" || (f.type === "combo-material" && !MATERIALS_BY_CATEGORY[cat])) ? (customOptions[f.name] || []) : [];
+  const out = base.slice();
+  extra.forEach(v => { if(!hasOpt(out, v)) out.push(v); });
+  return out;
+}
+function learnOption(f, row, raw){
+  const v = String(raw || "").trim();
+  if(!v || !f || !COMBO_TYPES.includes(f.type)) return;
+  if(hasOpt(optionsFor(f, row), v)) return;
+  const cat = (row.values[IDX["Main Category"]] || "").trim();
+  if(f.type === "combo-category"){ addCategoryIfNew(v); return; }
+  if(f.type === "combo-staff"){ addStaffIfNew(v); return; }
+  if(f.type === "combo-collection"){ addCollectionIfNew(v); return; }
+  if(f.type === "combo-sub"){
+    if(!cat) return;
+    CATEGORY_SUBCATS[cat] = CATEGORY_SUBCATS[cat] || [];
+    CATEGORY_SUBCATS[cat].push(v);
+  } else if(f.type === "combo-material" && cat && MATERIALS_BY_CATEGORY[cat]){
+    MATERIALS_BY_CATEGORY[cat].push(v);
+  } else {
+    (customOptions[f.name] = customOptions[f.name] || []).push(v);
+  }
+  scheduleConfigSave();
+}
+function learnRowOptions(row){
+  flatFields.forEach((f, i) => { if(COMBO_TYPES.includes(f.type)) learnOption(f, row, row.values[i]); });
+}
+
+/* =====================================================================
+   COPY / PASTE A PRODUCT'S DATA (everything except the photo)
+   Copy puts the row on the clipboard as tab-separated text, so it pastes
+   straight into Excel / Google Sheets, or into any product here.
+   ===================================================================== */
+let copiedRowValues = null;
+const COPY_FIELD_IDX = flatFields.map((f,i)=>i).filter(i => flatFields[i].type !== "image");
+const NO_PASTE_FIELDS = ["SKU", "Barcode / EAN / UPC"];   // must stay unique per product
+const COPY_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>`;
+const PASTE_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="11.5" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M8 6v5M5.8 8.8 8 11l2.2-2.2"/></svg>`;
+
+function showToast(msg){
+  let t = document.getElementById('appToast');
+  if(!t){ t = document.createElement('div'); t.id = 'appToast'; t.className = 'app-toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function writeClipboard(text){
+  if(navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((res, rej)=>{
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText='position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy') ? res() : rej(new Error('copy failed')); }catch(e){ rej(e); }
+    ta.remove();
+  });
+}
+function cleanCell(v){ return String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim(); }
+function copyRowData(rIdx){
+  const row = rows[rIdx]; if(!row) return;
+  copiedRowValues = row.values.slice();
+  const text = COPY_FIELD_IDX.map(i => cleanCell(row.values[i])).join('\t');
+  const name = (row.values[IDX["Product Name EN"]] || '').trim() || `product #${rIdx+1}`;
+  writeClipboard(text)
+    .then(()=> showToast(`Copied “${name}” (without photo) — paste into Excel/Sheets or use Paste on another product`))
+    .catch(()=> showToast(`Copied “${name}” inside the tool — use Paste on another product`));
+  renderBody();   // shows the Paste buttons
+}
+function pasteRowData(rIdx){
+  const row = rows[rIdx]; if(!row || !copiedRowValues) return;
+  const hasData = COPY_FIELD_IDX.some(i => (row.values[i] || '').toString().trim());
+  if(hasData && !confirm(`Replace the data of product #${rIdx+1} with the copied product?\n(Photo, SKU and Barcode are kept.)`)) return;
+  mutateWithHistory(`Row ${rIdx+1}: pasted copied product data`, ()=>{
+    COPY_FIELD_IDX.forEach(i => { if(!NO_PASTE_FIELDS.includes(flatFields[i].name)) row.values[i] = copiedRowValues[i] ?? ''; });
+    stampEdit(row);
+  });
+  showToast(`Pasted into product #${rIdx+1} — SKU and Barcode left as they were`);
+}
+/* Pasting tab-separated text (from this tool, Excel or Sheets) into a cell fills the cells to its right. */
+function handleGridPaste(e, rIdx, cIdx){
+  const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+  if(!text.includes('\t')) return;           // normal single-value paste
+  e.preventDefault();
+  const parts = text.replace(/\r?\n$/,'').split(/\r?\n/)[0].split('\t');
+  const targets = COPY_FIELD_IDX.filter(i => i >= cIdx);
+  const row = rows[rIdx];
+  mutateWithHistory(`Row ${rIdx+1}: pasted ${Math.min(parts.length, targets.length)} values`, ()=>{
+    parts.forEach((val, k) => { const i = targets[k]; if(i !== undefined) row.values[i] = val.trim(); });
+    stampEdit(row);
+  });
+}
+
 function moveRowUp(idx){ moveRow(idx, idx - 1); }
+
+/* ---- Type a position number to move a product there.
+   e.g. product 68 → type 40: it becomes #40 and #40–#67 each move down by one
+   automatically (and moving up the list works the same in reverse). ---- */
+function posInputHTML(rIdx, extra){
+  return `<input class="pos-input ${extra||''}" type="text" inputmode="numeric" value="${rIdx+1}" aria-label="Position"
+    title="Position — type a new number and press Enter to move this product"
+    onfocus="this.select()" onkeydown="posKey(event, this, ${rIdx})" onchange="setPosition(${rIdx}, this.value, this)">`;
+}
+function posKey(e, el, rIdx){
+  e.stopPropagation();
+  if(e.key === 'Enter'){ e.preventDefault(); el.blur(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); el.value = rIdx + 1; el.blur(); }
+}
+function setPosition(rIdx, raw, el){
+  const filledCount = rows.filter(rowHasAnyValue).length;
+  let target = parseInt(String(raw).replace(/[^0-9]/g,''), 10);
+  if(isNaN(target)){ if(el) el.value = rIdx + 1; return; }
+  target = Math.max(1, Math.min(filledCount, target));
+  if(target === rIdx + 1){ if(el) el.value = rIdx + 1; return; }
+  const to = target - 1;
+  moveRow(rIdx, to < rIdx ? to : to + 1);
+  // briefly highlight the product in its new place
+  requestAnimationFrame(()=>{
+    const tr = document.querySelector(`#tbody tr[data-row-index="${to}"]`);
+    const card = document.querySelector(`.mcard[data-row-index="${to}"]`);
+    [tr, card].forEach(x=>{ if(!x) return; x.classList.add('just-moved'); setTimeout(()=>x.classList.remove('just-moved'), 1600); });
+    if(card && getComputedStyle(card.parentNode).display !== 'none') card.scrollIntoView({block:'center', behavior:'smooth'});
+    else if(tr) tr.scrollIntoView({block:'center', behavior:'smooth'});
+  });
+}
 function moveRowDown(idx){ moveRow(idx, idx + 2); }
 
 /* Sort all products by a column. Empty values go last; empty rows stay at the bottom. */
@@ -2167,6 +2492,7 @@ function applySort(key){
   mutateWithHistory(`Sorted products by ${SORT_LABELS[key]}`, ()=>{
     const sorted = filled.map((r,i)=>({r,i})).sort((a,b)=> cmp(a.r,b.r) || (a.i-b.i)).map(x=>x.r);
     rows = sorted.concat(rows.filter(r=>!rowHasAnyValue(r)));
+    renumberOrder();
   });
   commitOrder();
 }
@@ -2219,7 +2545,6 @@ function setupRowDrag(){
 function renderBody(){
   setupRowDrag();
   closeComboMenu();
-  if(orderNeedsApply){ orderNeedsApply = false; applyProductOrder(); }
   sortEmptyRowsLast();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = "";
@@ -2244,7 +2569,7 @@ function renderBody(){
     rowNoTd.innerHTML = `
       <span class="rowtop">
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
-        <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${rIdx+1}
+        <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${rowStarted ? posInputHTML(rIdx) : `<span class="pos-num">${rIdx+1}</span>`}
         ${rowStarted ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
       </span>
       <span class="rowbtns">
@@ -2253,6 +2578,8 @@ function renderBody(){
         <button class="icon" title="Copy values from row above" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>⇧</button>
         <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
         <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
+        ${rowStarted ? `<button class="icon copyrow" title="Copy this product's data (without photo)" onclick="copyRowData(${rIdx})">${COPY_ICON}</button>` : ``}
+        ${copiedRowValues ? `<button class="icon pasterow" title="Paste copied product data here (keeps photo, SKU, Barcode)" onclick="pasteRowData(${rIdx})">${PASTE_ICON}</button>` : ``}
       </span>`;
     tr.appendChild(rowNoTd);
 
@@ -2338,16 +2665,7 @@ function renderBody(){
         el.type = 'text'; el.className = 'cell combo'; el.autocomplete = 'off';
         el.placeholder = disabled ? "Not applicable" : (f.type==="combo-sub" && !category ? "Choose category first" : "Select or type…");
         el.value = row.values[cIdx] || "";
-        el._comboOptions = () => {
-          const cat = row.values[IDX["Main Category"]];
-          if(f.type === "combo") return f.options;
-          if(f.type === "combo-sub") return CATEGORY_SUBCATS[cat] || [];
-          if(f.type === "combo-material") return MATERIALS_BY_CATEGORY[cat] || MATERIALS_DEFAULT;
-          if(f.type === "combo-category") return dynamicCategories;
-          if(f.type === "combo-staff") return dynamicStaff;
-          if(f.type === "combo-collection") return allCollections();
-          return options;
-        };
+        el._comboOptions = () => optionsFor(f, row);
         el._comboEmpty = f.type==="combo-sub" && !category ? "Choose a main category first" : null;
 
       } else if(MULTILINE_FIELDS[f.name]){
@@ -2363,7 +2681,7 @@ function renderBody(){
         el.className = 'cell';
         el.type = f.type === "number" ? "number" : "text";
         if(f.type==="number"){ if(f.min!==undefined) el.min = f.min; el.step = f.integer ? 1 : "any"; }
-        el.placeholder = disabled ? "Not applicable" : (FIELD_PLACEHOLDERS[f.name] || (f.type==="number" ? "0" : f.name));
+        el.placeholder = disabled ? "Not applicable" : (FIELD_PLACEHOLDERS[f.name] || (f.type==="number" ? "—" : f.name));
         el.value = row.values[cIdx] || "";
         if(f.rtl) el.classList.add('rtl-field');
       }
@@ -2383,6 +2701,7 @@ function renderBody(){
       el.addEventListener('blur', () => scheduleReleaseEditing(row.id));
       el.addEventListener('input', e => { if(!e.isTrusted) return; row.values[cIdx] = e.target.value; liveSave(row); });
       el.addEventListener('keydown', e => handleCellKeydown(e, rIdx, f, cIdx));
+      el.addEventListener('paste', e => handleGridPaste(e, rIdx, cIdx));
       el.addEventListener('change', e => {
         clearTimeout(liveSaveTimers[row.id]); delete liveSaveTimers[row.id]; delete liveSaveRows[row.id];
         row.values[cIdx] = e.target.value;
@@ -2397,7 +2716,7 @@ function renderBody(){
         logActivity(`Row ${rIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
         updateUndoRedoButtons();
         scheduleAutosave();
-        if(f.name === "Collection") addCollectionIfNew(row.values[cIdx]);
+        learnOption(f, row, row.values[cIdx]);
         if(f.name === "Main Category"){
           addCategoryIfNew(row.values[cIdx]);
           if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
@@ -2495,13 +2814,14 @@ function renderBody(){
     card.innerHTML = `
       <div class="mcard-select" onclick="event.stopPropagation()">
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
+        ${rowStarted ? posInputHTML(rIdx, 'mpos') : ``}
       </div>
       <div class="mcard-thumb">${imgUrl ? `<img src="${imgUrl}" alt="">` : `<span class="mcard-noimg">No photo</span>`}</div>
       <div class="mcard-body">
-        <div class="mcard-title${name?'':' untitled'}">${name || `Product ${rIdx+1}`}</div>
-        <div class="mcard-sub">${subLine}</div>
+        <div class="mcard-title${name?'':' untitled'}">${name || (rowStarted ? 'Untitled product' : 'Empty row')}</div>
+        <div class="mcard-sub">${rowStarted ? subLine : 'Tap to start entering a product'}</div>
         <div class="mcard-meta">
-          <span class="mcard-status ${statusClass(status)}">${status}</span>
+          ${rowStarted ? `<span class="mcard-status ${statusClass(status)}">${status}</span>` : ``}
           ${price ? `<span class="mcard-price">$${price}</span>` : ``}
         </div>
         <div class="mcard-progress-row">
@@ -2510,7 +2830,7 @@ function renderBody(){
         </div>
       </div>
       <div class="mcard-actions" onclick="event.stopPropagation()">
-        ${rowStarted ? `<div class="mcard-move">
+        ${rowStarted ? `<div class="mcard-move mcard-move-ud">
           <button class="icon" title="Move up" onclick="moveRowUp(${rIdx})" ${rIdx===0?'disabled':''}>↑</button>
           <button class="icon" title="Move down" onclick="moveRowDown(${rIdx})" ${(rIdx+1>=rows.length || !rowHasAnyValue(rows[rIdx+1]))?'disabled':''}>↓</button>
         </div>` : ``}
@@ -2518,6 +2838,10 @@ function renderBody(){
           <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
           <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
         </div>
+        ${(rowStarted || copiedRowValues) ? `<div class="mcard-move">
+          ${rowStarted ? `<button class="icon copyrow" title="Copy data (without photo)" onclick="copyRowData(${rIdx})">${COPY_ICON}</button>` : ``}
+          ${copiedRowValues ? `<button class="icon pasterow" title="Paste copied data here" onclick="pasteRowData(${rIdx})">${PASTE_ICON}</button>` : ``}
+        </div>` : ``}
       </div>`;
     mobileCards.appendChild(card);
   });
@@ -2616,20 +2940,21 @@ function refreshFocusedHeader(){
 }
 function updateStats(){
   const dupeInfo = getDupeSets();
-  document.getElementById('statRows').textContent = rows.length;
-  const total = rows.length * flatFields.length;
-  const filled = rows.reduce((acc, row) => acc + row.values.filter(v => v && v.toString().trim() !== "").length, 0);
+  const P = rows.filter(rowHasAnyValue);   // empty rows aren't products
+  document.getElementById('statRows').textContent = P.length;
+  const total = P.length * flatFields.length;
+  const filled = P.reduce((acc, row) => acc + row.values.filter(v => v && v.toString().trim() !== "").length, 0);
   document.getElementById('statFilled').textContent = total ? Math.round((filled/total)*100) + "%" : "0%";
-  document.getElementById('statIncomplete').textContent = rows.filter(rowMissingRequired).length;
-  document.getElementById('statDupes').textContent = rows.filter(r=>rowHasDupe(r, dupeInfo)).length;
-  document.getElementById('statInvalid').textContent = rows.filter(rowHasInvalid).length;
-  document.getElementById('statNoImage').textContent = rows.filter(r=>!rowHasImage(r)).length;
-  document.getElementById('statReady').textContent = rows.filter(r=>{ const s=computeStatus(r); return s==='Ready'||s==='Published'; }).length;
-  document.getElementById('statAvgCompletion').textContent = rows.length ? Math.round(rows.reduce((a,r)=>a+rowCompletionPct(r),0)/rows.length) + "%" : "0%";
+  document.getElementById('statIncomplete').textContent = P.filter(rowMissingRequired).length;
+  document.getElementById('statDupes').textContent = P.filter(r=>rowHasDupe(r, dupeInfo)).length;
+  document.getElementById('statInvalid').textContent = P.filter(rowHasInvalid).length;
+  document.getElementById('statNoImage').textContent = P.filter(r=>!rowHasImage(r)).length;
+  document.getElementById('statReady').textContent = P.filter(r=>{ const s=computeStatus(r); return s==='Ready'||s==='Published'; }).length;
+  document.getElementById('statAvgCompletion').textContent = P.length ? Math.round(P.reduce((a,r)=>a+rowCompletionPct(r),0)/P.length) + "%" : "0%";
 
-  const incomplete = rows.filter(r=>computeStatus(r)==='Incomplete').length;
-  const awaitingReview = rows.filter(r=>computeStatus(r)==='Needs Review' || computeStatus(r)==='Ready for Review').length;
-  document.getElementById('queueText').innerHTML = `Queue: <strong>${rows.length}</strong> products · <strong>${incomplete}</strong> incomplete · <strong>${awaitingReview}</strong> awaiting review`;
+  const incomplete = P.filter(r=>computeStatus(r)==='Incomplete').length;
+  const awaitingReview = P.filter(r=>computeStatus(r)==='Needs Review' || computeStatus(r)==='Ready for Review').length;
+  document.getElementById('queueText').innerHTML = `Queue: <strong>${P.length}</strong> products · <strong>${incomplete}</strong> incomplete · <strong>${awaitingReview}</strong> awaiting review`;
 
   refreshFilterOptions();
 }
@@ -2752,7 +3077,7 @@ function resetFiltersQuiet(){
 
 /* ---- Entry queue ---- */
 function goToNextIncomplete(){
-  const idx = rows.findIndex(r => computeStatus(r) === 'Incomplete');
+  const idx = rows.findIndex(r => rowHasAnyValue(r) && computeStatus(r) === 'Incomplete');
   if(idx === -1){ flashQueueText('Nothing incomplete — nice work.'); return; }
   applyView('all');
   const tr = document.querySelector(`#tbody tr[data-row-index="${idx}"]`);
@@ -2979,8 +3304,20 @@ function renderManageModal(){
   const colCard = document.createElement('div'); colCard.className='manage-cat-card';
   const colH = document.createElement('h3'); const colSpan = document.createElement('span'); colSpan.textContent = 'Collections'; colH.appendChild(colSpan);
   colCard.appendChild(colH);
-  colCard.appendChild(buildChipGroup('Collections', dynamicCollections));
+  colCard.appendChild(buildChipGroup('Collections', dynamicCollections, 'collection', true));
   body.appendChild(colCard);
+  // Shared lists staff can edit (new values typed in the sheet appear here automatically)
+  [["Brand","Brands","brand"],["Color","Colors","color"]].forEach(([name, title, one])=>{
+    customOptions[name] = customOptions[name] || [];
+    const card = document.createElement('div'); card.className='manage-cat-card';
+    const h = document.createElement('h3'); const sp = document.createElement('span');
+    sp.textContent = title; h.appendChild(sp); card.appendChild(h);
+    card.appendChild(buildChipGroup(title, customOptions[name], one, true));
+    body.appendChild(card);
+  });
+  const catTitle = document.createElement('div'); catTitle.className = 'manage-section-title';
+  catTitle.textContent = 'Categories, subcategories & materials';
+  body.appendChild(catTitle);
   dynamicCategories.forEach(cat=>{
     const card = document.createElement('div'); card.className='manage-cat-card';
     const h3 = document.createElement('h3');
@@ -2994,7 +3331,7 @@ function renderManageModal(){
     body.appendChild(card);
   });
 }
-function buildChipGroup(label, arr){
+function buildChipGroup(label, arr, singular, hideLabel){
   const group = document.createElement('div'); group.className='chip-group';
   const lbl = document.createElement('label'); lbl.textContent=label;
   const chipsWrap = document.createElement('div'); chipsWrap.className='chips';
@@ -3007,7 +3344,7 @@ function buildChipGroup(label, arr){
     chipsWrap.appendChild(chip);
   });
   const input = document.createElement('input'); input.className='chip-input';
-  input.placeholder = '+ add ' + label.toLowerCase().replace(/ies$/,'y').replace(/s$/,'');
+  input.placeholder = '+ Add ' + (singular || label.toLowerCase().replace(/ies$/,'y').replace(/s$/,'')) + ' and press Enter';
   input.addEventListener('keydown', e=>{
     if(e.key==='Enter'){
       e.preventDefault();
@@ -3016,7 +3353,9 @@ function buildChipGroup(label, arr){
       input.value='';
     }
   });
-  group.appendChild(lbl); group.appendChild(chipsWrap); group.appendChild(input);
+  if(!hideLabel) group.appendChild(lbl);
+  if(!arr.length){ const em=document.createElement('span'); em.className='chips-empty'; em.textContent='Nothing added yet'; chipsWrap.appendChild(em); }
+  group.appendChild(chipsWrap); group.appendChild(input);
   return group;
 }
 function removeCategory(cat){
@@ -3124,7 +3463,7 @@ function renderFocusedMode(){
   document.getElementById('fhCenter').innerHTML = `
     <div class="fh-title-row">
       <strong class="fh-title">${row.values[IDX["Product Name EN"]] || 'Untitled product'}</strong>
-      <span class="fh-count">Product ${focusedRowIdx+1} / ${rows.length}</span>
+      <span class="fh-count">Product ${focusedRowIdx+1} / ${Math.max(rows.filter(rowHasAnyValue).length, focusedRowIdx+1)}</span>
     </div>
     <div class="fh-meta-row">
       <span class="focused-status-pill">${status} · ${pct}%</span>
@@ -3210,7 +3549,7 @@ function buildFocusedField(f, row, cIdx){
     if(f.type === 'combo-collection') options = allCollections();
     el = document.createElement('input');
     el.type = 'text'; el.className = 'f-input'; el.autocomplete = 'off';
-    el._comboOptions = () => options;
+    el._comboOptions = () => optionsFor(f, row);
     el.placeholder = 'Select or type…';
     el.value = row.values[cIdx] || '';
   } else if(MULTILINE_FIELDS[f.name]){
@@ -3244,7 +3583,7 @@ function buildFocusedField(f, row, cIdx){
     logActivity(`Row ${focusedRowIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
     updateUndoRedoButtons();
     scheduleAutosave();
-    if(f.name === "Collection") addCollectionIfNew(row.values[cIdx]);
+    learnOption(f, row, row.values[cIdx]);
     if(f.name === "Main Category"){
       addCategoryIfNew(row.values[cIdx]);
       if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
@@ -3329,7 +3668,7 @@ function buildFocusedImageField(f, row, cIdx){
   if(!imgUrl){
     const nameLine = document.createElement('div');
     nameLine.style.cssText = 'font-size:11.5px;color:var(--ink-soft);margin-top:8px;';
-    nameLine.textContent = 'Tap to upload a photo';
+    nameLine.textContent = 'Click or tap to upload a photo';
     wrap.appendChild(nameLine);
   }
 
@@ -3387,7 +3726,7 @@ function renderFocusedReview(content, row){
 
   if(rowMissingRequired(row)){
     const warn = document.createElement('div');
-    warn.className = 'field-note';
+    warn.className = 'field-note review-warning';
     warn.style.marginTop = '14px';
     warn.textContent = "This product is still missing required fields and can't be marked Published yet.";
     content.appendChild(warn);
@@ -3432,19 +3771,61 @@ document.addEventListener('keydown', e=>{
 /* ========================================================================
    EXPORT
    ======================================================================== */
+/* Download products as a .csv file that opens correctly in Excel / Google Sheets / Numbers,
+   Arabic included. Exports the selected products if any are ticked, otherwise every product,
+   in the current order, with its position number. The file can be imported back with Import CSV. */
+function exportCSV(){
+  const filled = rows.filter(rowHasAnyValue);
+  const picked = filled.filter(r => selectedRowIds.has(r.id));
+  const list = picked.length ? picked : filled;
+  if(!list.length){ showToast('There are no products to export yet'); return; }
+  const esc = v => {
+    const t = (v ?? '').toString();
+    return /[",\r\n]/.test(t) || /^\s|\s$/.test(t) ? `"${t.replace(/"/g,'""')}"` : t;
+  };
+  const header = ['Position', ...flatFields.map(f => f.name)];
+  const lines = [header.map(esc).join(',')];
+  list.forEach(r => lines.push([rows.indexOf(r) + 1, ...flatFields.map((f,i) => r.values[i] || '')].map(esc).join(',')));
+  const csv = '\uFEFF' + lines.join('\r\n');           // BOM so Excel shows Arabic correctly
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const name = `cup-and-saucer-products-${stamp}${picked.length ? '-selected' : ''}.csv`;
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  logActivity(`Exported ${list.length} product${list.length===1?'':'s'} to CSV`);
+  showToast(`Exported ${list.length} product${list.length===1?'':'s'} → ${name}`);
+}
+function toggleMoreMenu(e){
+  e.stopPropagation();
+  const m = document.getElementById('moreMenu');
+  const open = !m.classList.contains('show');
+  m.classList.toggle('show', open);
+  if(open){
+    const r = e.currentTarget.getBoundingClientRect();
+    m.style.top = (r.bottom + 6) + 'px';
+    m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8)) + 'px';
+  }
+}
+function closeMoreMenu(){ const m = document.getElementById('moreMenu'); if(m) m.classList.remove('show'); }
+document.addEventListener('click', e => { if(!e.target.closest('.more-wrap')) closeMoreMenu(); });
+window.addEventListener('scroll', closeMoreMenu, true);
 function copyAsCSV(){
   const header = flatFields.map(f => f.name);
-  const csvRows = [header, ...rows.map(r=>r.values)];
+  const csvRows = [header, ...rows.filter(rowHasAnyValue).map(r=>r.values)];
   const csv = csvRows.map(r => r.map(c => `"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
-  navigator.clipboard.writeText(csv).then(()=>flash(event.target,'Copied ✓'));
+  writeClipboard(csv).then(()=>showToast('All products copied as CSV')).catch(()=>showToast('Copy failed — use Export CSV instead'));
 }
 function copyAsJSON(){
-  const out = rows.map(row => {
+  const out = rows.filter(rowHasAnyValue).map(row => {
     const obj = {};
     flatFields.forEach((f, i) => obj[f.name] = row.values[i] || "");
     return obj;
   });
-  navigator.clipboard.writeText(JSON.stringify(out, null, 2)).then(()=>flash(event.target,'Copied ✓'));
+  writeClipboard(JSON.stringify(out, null, 2)).then(()=>showToast('All products copied as JSON')).catch(()=>showToast('Copy failed'));
 }
 function flash(btn, msg){
   const old = btn.textContent;
