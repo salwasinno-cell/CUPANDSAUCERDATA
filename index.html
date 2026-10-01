@@ -661,6 +661,24 @@
   .image-cell .img-remove{top:3px !important;left:auto !important;right:3px;}
   body.rows-small .image-cell .img-remove{top:2px !important;right:2px;}
   @media (min-width:861px){ .toolbar{gap:6px;} .toolbar > button, .toolbar > .more-wrap > button, .toolbar > select{padding-left:12px;padding-right:12px;} .toolbar-select{padding-right:28px;} }
+
+  /* =====================================================================
+     LONG TEXT: 2 lines in the table, full text on click
+     ===================================================================== */
+  .cellbox-multiline{position:relative;}
+  .cellbox-multiline textarea.cell{overflow:hidden;}
+  .cellbox.expanded{overflow:visible;z-index:30;}
+  .cellbox.expanded textarea.cell{position:relative;z-index:31;overflow-y:auto;max-height:320px;
+    background-color:var(--white) !important;border:1px solid var(--brass) !important;border-radius:6px;
+    box-shadow:0 12px 28px rgba(27,28,31,0.18), 0 0 0 3px rgba(199,167,100,0.18);margin:-1px;}
+  .cellbox.has-more:not(.expanded)::after{content:'… more';position:absolute;right:6px;bottom:3px;padding:0 4px 0 22px;font-size:10.5px;font-weight:600;color:var(--brass-dim);
+    background:linear-gradient(90deg, rgba(253,252,249,0), #FDFCF9 45%);pointer-events:none;border-radius:0 0 5px 0;}
+  .cellbox.has-more:not(.expanded):has(.translate-btn)::after{right:40px;}
+  .cellbox.has-more:not(.expanded):has(.rtl-field)::after{content:'المزيد …';right:auto;left:6px;padding:0 22px 0 4px;background:linear-gradient(270deg, rgba(253,252,249,0), #FDFCF9 45%);border-radius:0 0 0 5px;}
+  .cellbox.has-more:not(.expanded):has(.rtl-field):has(.translate-btn)::after{left:6px;}
+  td.required-empty .cellbox.has-more::after{background:linear-gradient(90deg, rgba(251,241,239,0), #FBF1EF 45%);}
+  .cellbox-multiline textarea.cell{cursor:text;}
+  .cellbox.has-more:not(.expanded) textarea.cell{clip-path:inset(0 0 8px 0);}
 </style>
 </head>
 <body>
@@ -2199,8 +2217,37 @@ const MULTILINE_FIELDS = {
   "Included Pieces":"mid", "Care Instructions":"mid", "Internal Notes":"mid"
 };
 function autoGrow(el){
+  if(el.classList.contains('cell')){ sizeGridText(el); return; }   // table cells: collapsed / expanded
   el.style.height = 'auto';
-  el.style.height = Math.max(36, el.scrollHeight) + 'px';
+  el.style.height = Math.max(36, el.scrollHeight) + 'px';         // Focused Mode / phone form: full height
+}
+/* ---- Long text in the table (descriptions, names, notes…)
+   Shows at most 2 lines (1 line when photos are Small), so long text never makes a row taller.
+   Click / tap the text to see and edit all of it — it opens over the rows below without
+   moving them — and it folds back when you click elsewhere. ---- */
+const GRID_LINE_PX = 13 * 1.45, GRID_PAD_PX = 16;
+function gridTextCap(){
+  const lines = document.body.classList.contains('rows-small') ? 1 : 2;
+  return Math.max(36, Math.ceil(GRID_PAD_PX + lines * GRID_LINE_PX));
+}
+function sizeGridText(el){
+  const box = el.closest('.cellbox');
+  const focused = document.activeElement === el;
+  if(focused && box && !box.classList.contains('expanded')){
+    box.style.height = box.getBoundingClientRect().height + 'px';   // freeze the row height
+    box.classList.add('expanded');
+  }
+  el.style.height = 'auto';
+  const full = Math.max(36, el.scrollHeight);
+  const cap = gridTextCap();
+  if(focused){
+    el.style.height = full + 'px';
+  } else {
+    el.style.height = Math.min(full, cap) + 'px';
+    el.scrollTop = 0;
+    if(box){ box.classList.remove('expanded'); box.style.height = ''; }
+  }
+  if(box) box.classList.toggle('has-more', full > cap + 1);
 }
 function autoGrowAll(root){
   (root || document).querySelectorAll('textarea.cell, textarea.f-textarea').forEach(autoGrow);
@@ -2791,6 +2838,9 @@ function renderBody(){
         el.value = row.values[cIdx] || "";
         if(f.rtl) el.classList.add('rtl-field');
         el.addEventListener('input', () => autoGrow(el));
+        el.addEventListener('focus', () => sizeGridText(el));
+        el.addEventListener('blur', () => sizeGridText(el));
+        el.addEventListener('keydown', e => { if(e.key === 'Escape'){ e.stopPropagation(); el.blur(); } });
       } else {
         el = document.createElement('input');
         el.className = 'cell';
