@@ -599,6 +599,42 @@
     .search-bar .filter-row{flex-direction:row !important;flex-wrap:wrap;gap:8px 16px;}
     .search-bar .filter-row .search-box{flex:0 0 100%;}
   }
+
+  /* =====================================================================
+     FULL-SCREEN TABLE
+     ===================================================================== */
+  .btn-fullscreen{display:inline-flex;align-items:center;gap:7px;}
+  .btn-fullscreen.active{border-color:var(--brass);color:var(--brass-light);}
+  .sheet-card{position:relative;}
+  .sheet-fs-bar{display:none;}
+  .sheet-fs-corner{position:absolute;top:0;right:0;z-index:6;width:28px;height:16px;padding:0;border:none;border-left:1px solid var(--hairline-strong);border-radius:0;background:var(--ivory-2);color:var(--brass-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .sheet-fs-corner svg{width:11px;height:11px;}
+  .sheet-fs-corner:hover{background:var(--brass-light);color:var(--ink);}
+  .scroll-mirror{margin-right:28px;}
+
+  body.sheet-fullscreen{overflow:hidden;}
+  body.sheet-fullscreen .sheet-card{position:fixed;inset:0;z-index:55;margin:0;max-width:none;border:none;border-radius:0;display:flex;flex-direction:column;background:var(--ivory);box-shadow:none;}
+  body.sheet-fullscreen .sheet-fs-corner{display:none;}
+  body.sheet-fullscreen .scroll-mirror{margin-right:0;flex:0 0 auto;}
+  body.sheet-fullscreen .table-scroll{max-height:none;flex:1 1 auto;min-height:0;}
+  body.sheet-fullscreen .grid-empty-state{flex:0 0 auto;}
+  body.sheet-fullscreen .sheet-fs-bar{display:flex;align-items:center;gap:16px;flex:0 0 auto;padding:10px 20px;background:var(--charcoal);color:#EDEBE4;border-bottom:1px solid #000;}
+  .fs-title{font-family:'Cormorant Garamond', Georgia, serif;font-size:19px;white-space:nowrap;}
+  .fs-title span{color:var(--brass);font-style:italic;}
+  .fs-title em{font-style:normal;font-family:inherit;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--brass);margin-left:10px;font-family:system-ui, sans-serif;}
+  .fs-search{flex:1 1 auto;max-width:380px;height:34px;padding:0 12px;border:1px solid #45464B;border-radius:6px;background:#26272C;color:#F1EFE8;font:inherit;font-size:13px;}
+  .fs-search::placeholder{color:#8E8F94;}
+  .fs-search:focus{outline:none;border-color:var(--brass);}
+  .fs-actions{display:flex;align-items:center;gap:8px;margin-left:auto;}
+  .fs-status{font-size:11.5px;color:#9C9D9F;margin-right:6px;white-space:nowrap;}
+  .fs-btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1px solid #45464B;border-radius:4px;background:transparent;color:#D8D9D4;font-size:12.5px;white-space:nowrap;}
+  .fs-btn:hover{border-color:var(--brass-dim);color:var(--brass-light);}
+  .fs-btn.fs-primary{background:var(--brass);border-color:var(--brass);color:var(--charcoal);font-weight:600;}
+  .fs-btn.fs-primary:hover{background:var(--brass-light);color:var(--charcoal);}
+  .fs-btn.fs-exit{border-color:var(--brass-dim);color:var(--brass-light);}
+  @media (max-width:860px){
+    .btn-fullscreen, .sheet-fs-corner{display:none !important;}   /* phones use product cards, not the table */
+  }
 </style>
 </head>
 <body>
@@ -643,6 +679,7 @@
         <option value="oldest">Oldest first</option>
         <option value="completion">Most complete first</option>
       </select>
+      <button class="btn-ghost btn-fullscreen" type="button" onclick="toggleSheetFullscreen()" title="Show the table full screen (Esc to exit)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg> Full Screen</button>
       <button class="btn-ghost" onclick="openImportModal()">Import CSV</button>
       <button class="btn-ghost btn-export" onclick="exportCSV()" title="Download all products (or only the selected ones) as a CSV file">⬇ Export CSV</button>
       <button class="btn-ghost" onclick="openManageModal()">Manage Lists</button>
@@ -739,7 +776,19 @@
 </div>
 
 <div class="sheet-wrap">
-  <div class="sheet-card">
+  <div class="sheet-card" id="sheetCard">
+    <div class="sheet-fs-bar">
+      <div class="fs-title">Cup <span>&amp;</span> Saucer <em>Products</em></div>
+      <input class="fs-search" id="fsSearch" type="search" placeholder="Search products…" oninput="document.getElementById('searchBox').value=this.value; applyFilters();">
+      <div class="fs-actions">
+        <span class="fs-status" id="fsSaveStatus"></span>
+        <button type="button" class="fs-btn" onclick="undo()" title="Undo (Ctrl/Cmd+Z)">↺ Undo</button>
+        <button type="button" class="fs-btn" onclick="redo()" title="Redo (Ctrl/Cmd+Shift+Z)">↻ Redo</button>
+        <button type="button" class="fs-btn fs-primary" onclick="addRow()">+ Add Product</button>
+        <button type="button" class="fs-btn fs-exit" onclick="toggleSheetFullscreen(false)" title="Exit full screen (Esc)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg> Exit Full Screen</button>
+      </div>
+    </div>
+    <button type="button" class="sheet-fs-corner" onclick="toggleSheetFullscreen(true)" title="Full screen"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
     <div class="scroll-mirror" id="scrollMirror"><div class="scroll-mirror-inner" id="scrollMirrorInner"></div></div>
     <div class="table-scroll" id="tableScroll">
       <table>
@@ -1910,6 +1959,8 @@ function setSaveStatus(text){
   if(el) el.textContent = text;
   const fe = document.getElementById('focusedSaveStatus');
   if(fe) fe.textContent = text;
+  const fs = document.getElementById('fsSaveStatus');
+  if(fs) fs.textContent = text;
 }
 function scheduleAutosave(){
   clearTimeout(autosaveTimer);
@@ -3799,6 +3850,36 @@ function exportCSV(){
   logActivity(`Exported ${list.length} product${list.length===1?'':'s'} to CSV`);
   showToast(`Exported ${list.length} product${list.length===1?'':'s'} → ${name}`);
 }
+/* ---- Full-screen table ----
+   Fills the whole window with the sheet (and hides the browser bars where the
+   browser allows it). Esc, the Exit button, or the toolbar button turns it off. */
+function toggleSheetFullscreen(force){
+  const on = typeof force === 'boolean' ? force : !document.body.classList.contains('sheet-fullscreen');
+  document.body.classList.toggle('sheet-fullscreen', on);
+  closeComboMenu(); closeMoreMenu();
+  const fsSearch = document.getElementById('fsSearch');
+  if(on){
+    fsSearch.value = document.getElementById('searchBox').value;
+    document.getElementById('fsSaveStatus').textContent = document.getElementById('saveStatus').textContent;
+    const el = document.documentElement;
+    if(!document.fullscreenElement && el.requestFullscreen){ el.requestFullscreen().catch(()=>{}); }
+  } else {
+    document.getElementById('searchBox').value = fsSearch.value;
+    if(document.fullscreenElement && document.exitFullscreen){ document.exitFullscreen().catch(()=>{}); }
+  }
+  document.querySelectorAll('.btn-fullscreen').forEach(b => b.classList.toggle('active', on));
+  requestAnimationFrame(()=>{ try{ autoGrowAll(document.getElementById('tbody')); }catch(e){} if(typeof syncScrollMirror==='function') syncScrollMirror(); });
+}
+// leaving browser full screen (Esc / F11) also leaves full-screen table mode
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement && document.body.classList.contains('sheet-fullscreen')) toggleSheetFullscreen(false);
+});
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && document.body.classList.contains('sheet-fullscreen')
+     && !document.querySelector('.modal-overlay.show, .drawer.show, .focused-overlay.show, .combo-menu.show')){
+    toggleSheetFullscreen(false);
+  }
+});
 function toggleMoreMenu(e){
   e.stopPropagation();
   const m = document.getElementById('moreMenu');
