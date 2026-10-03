@@ -679,6 +679,26 @@
   td.required-empty .cellbox.has-more::after{background:linear-gradient(90deg, rgba(251,241,239,0), #FBF1EF 45%);}
   .cellbox-multiline textarea.cell{cursor:text;}
   .cellbox.has-more:not(.expanded) textarea.cell{clip-path:inset(0 0 8px 0);}
+  #exportMenu{min-width:270px;}
+  #exportMenu button small{display:block;font-size:11px;color:var(--ink-soft);margin-top:2px;font-weight:400;}
+  #exportMenu button b{font-weight:600;}
+
+  /* insert row */
+  .icon.insrow{color:#2E7D5B;display:inline-flex;align-items:center;justify-content:center;}
+  .mcard-actions .icon.insrow svg{width:16px;height:16px;}
+  /* phone: jump to top / bottom */
+  .jump-btns{display:none;}
+  @media (max-width:860px){
+    .jump-btns{display:flex;flex-direction:column;gap:10px;position:fixed;left:16px;bottom:calc(18px + env(safe-area-inset-bottom, 0px));z-index:60;}
+    .jump-btn{width:44px;height:44px;border-radius:50%;border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.96);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 4px 14px rgba(0,0,0,0.18);cursor:pointer;transition:opacity .2s, transform .2s;}
+    .jump-btn:active{background:var(--brass-light);}
+    .jump-btn.off{opacity:0;pointer-events:none;transform:scale(0.85);}
+    body.sheet-fullscreen .jump-btns{display:none;}
+    #mobileCards{padding-bottom:130px;}
+  }
+  .row-menu button{gap:10px !important;}
+  .row-menu .mi{width:16px;flex:0 0 16px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
+  .row-menu .mi svg{width:13px;height:13px;}
 </style>
 </head>
 <body>
@@ -725,7 +745,13 @@
       </select>
       <button class="btn-ghost btn-fullscreen" type="button" onclick="toggleSheetFullscreen()" title="Show the table full screen (Esc to exit)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg> Full Screen</button>
       <button class="btn-ghost" onclick="openImportModal()">Import CSV</button>
-      <button class="btn-ghost btn-export" onclick="exportCSV()" title="Download all products (or only the selected ones) as a CSV file">⬇ Export CSV</button>
+      <div class="more-wrap export-wrap">
+        <button class="btn-ghost btn-export" type="button" onclick="toggleExportMenu(event)" title="Download all products (or only the ticked ones)">⬇ Export ▾</button>
+        <div class="more-menu" id="exportMenu" role="menu">
+          <button type="button" onclick="document.getElementById('exportMenu').classList.remove('show'); exportExcel()"><b>Excel with photos</b> (.xlsx)<small>Photos inside each row · barcodes kept in full</small></button>
+          <button type="button" onclick="document.getElementById('exportMenu').classList.remove('show'); exportCSV()"><b>CSV</b> (.csv)<small>Text only — photo links, no pictures</small></button>
+        </div>
+      </div>
       <button class="btn-ghost" onclick="openManageModal()">Manage Lists</button>
       <div class="more-wrap">
         <button class="btn-ghost more-btn" type="button" onclick="toggleMoreMenu(event)" aria-haspopup="true">More ▾</button>
@@ -847,6 +873,12 @@
 <!-- Mobile card list — shown instead of the grid below 860px; tapping a card opens Focused Mode -->
 <div class="mobile-cards" id="mobileCards"></div>
 <button class="mobile-fab" onclick="addRow()" title="Add Product">+</button>
+<div class="jump-btns" aria-label="Page navigation">
+  <button type="button" class="jump-btn" id="jumpTop" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Go to top" aria-label="Go to top">
+    <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h10M8 13.5V6M4.5 9.5 8 6l3.5 3.5"/></svg></button>
+  <button type="button" class="jump-btn" id="jumpBottom" onclick="window.scrollTo({top:document.documentElement.scrollHeight, behavior:'smooth'})" title="Go to bottom" aria-label="Go to bottom">
+    <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13.5h10M8 2.5V10M4.5 6.5 8 10l3.5-3.5"/></svg></button>
+</div>
 
 <footer class="note">
   <span class="dot"></span>
@@ -1456,14 +1488,15 @@ function openRowMenu(e, rIdx){
   const row = rows[rIdx]; const started = rowHasAnyValue(row);
   const item = (label, fn, cls='', dis=false) => `<button type="button" class="${cls}" ${dis?'disabled':''} onclick="document.getElementById('rowMenu').classList.remove('show'); ${fn}">${label}</button>`;
   m.innerHTML =
-    item('👁&nbsp; Quick preview', `openPreview(${rIdx})`) +
-    item('⤢&nbsp; Open in Focused Mode', `openFocusedMode(${rIdx})`) +
-    item('⇧&nbsp; Copy values from row above', `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
-    item('⧉&nbsp; Duplicate product', `duplicateRow(${rIdx})`) +
-    (started ? item(COPY_ICON + '&nbsp; Copy data (without photo)', `copyRowData(${rIdx})`) : '') +
-    (copiedRowValues ? item(PASTE_ICON + '&nbsp; Paste copied data here', `pasteRowData(${rIdx})`) : '') +
+    item('<span class="mi">👁</span>Quick preview', `openPreview(${rIdx})`) +
+    item('<span class="mi">⤢</span>Open in Focused Mode', `openFocusedMode(${rIdx})`) +
+    item('<span class="mi">⇧</span>Copy values from row above', `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
+    (isPlaced(row) ? item('<span class="mi">' + INSERT_ICON + '</span>Insert new product above', `insertRowAbove(${rIdx})`) + item('<span class="mi">' + INSERT_ICON + '</span>Insert new product below', `insertRowBelow(${rIdx})`) : '') +
+    item('<span class="mi">⧉</span>Duplicate product', `duplicateRow(${rIdx})`) +
+    (started ? item('<span class="mi">' + COPY_ICON + '</span>Copy data (without photo)', `copyRowData(${rIdx})`) : '') +
+    (copiedRowValues ? item('<span class="mi">' + PASTE_ICON + '</span>Paste copied data here', `pasteRowData(${rIdx})`) : '') +
     '<div class="more-sep"></div>' +
-    item('✕&nbsp; Delete row', `deleteRow(${rIdx})`, 'danger');
+    item('<span class="mi">✕</span>Delete row', `deleteRow(${rIdx})`, 'danger');
   m.dataset.row = String(rIdx);
   m.classList.add('show');
   const r = e.currentTarget.getBoundingClientRect();
@@ -2200,9 +2233,9 @@ function sortEmptyRowsLast(){
   const focusedId = rows[focusedRowIdx] ? rows[focusedRowIdx].id : null;
   if(HAS_SORT_COLUMN) sortRowsByPosition();
   else if(orderNeedsApply){ orderNeedsApply = false; applyProductOrder(); }
-  const filled = [], empty = [];
-  rows.forEach(r => (rowHasAnyValue(r) ? filled : empty).push(r));
-  rows = filled.concat(empty);
+  const placed = [], loose = [];
+  rows.forEach(r => (isPlaced(r) ? placed : loose).push(r));
+  rows = placed.concat(loose);
   if(focusedId !== null){
     const i = rows.findIndex(r => r.id === focusedId);
     if(i !== -1) focusedRowIdx = i;
@@ -2410,10 +2443,49 @@ function applyProductOrder(){
   rows = indexed.map(x=>x.r);
 }
 /* Give every filled product its position number, in the current on-screen order. */
+/* A row keeps its place in the list if it has data, or if it was inserted at a
+   specific position (even while still empty). Other empty rows sit at the bottom. */
+function isPlaced(r){ return rowHasAnyValue(r) || (typeof r.sortOrder === 'number' && isFinite(r.sortOrder)); }
 function renumberOrder(){
   let n = 0;
-  rows.forEach(r=>{ if(rowHasAnyValue(r)){ n += 1; r.sortOrder = n; } });
+  rows.forEach(r=>{ if(isPlaced(r)){ n += 1; r.sortOrder = n; } });
 }
+/* Insert a new, empty product at a position: everything from that position down moves by one.
+   e.g. insert below #55 → the new row becomes #56, old #56 becomes #57, and so on. */
+function insertRowAt(index){
+  index = Math.max(0, Math.min(index, rows.filter(isPlaced).length));
+  const nr = newRow();
+  nr.sortOrder = index + 0.5;              // temporary, renumbered right away
+  mutateWithHistory(`Inserted a new product at position ${index+1}`, ()=>{
+    rows.splice(index, 0, nr);
+    renumberOrder();
+  });
+  commitOrder();
+  requestAnimationFrame(()=>{
+    const i = rows.indexOf(nr);
+    const tr = document.querySelector(`#tbody tr[data-row-index="${i}"]`);
+    const card = document.querySelector(`.mcard[data-row-index="${i}"]`);
+    const onPhone = card && getComputedStyle(card.parentNode).display !== 'none';
+    const el = onPhone ? card : tr;
+    if(!el) return;
+    el.classList.add('just-moved'); setTimeout(()=>el.classList.remove('just-moved'), 1600);
+    el.scrollIntoView({ block:'center', behavior:'smooth' });
+    if(!onPhone){ const first = tr.querySelector('textarea.cell, input.cell'); if(first) setTimeout(()=>first.focus({preventScroll:true}), 350); }
+    showToast(`New product inserted at #${i+1} — the ones below moved down by one`);
+  });
+}
+function insertRowBelow(idx){ insertRowAt(idx + 1); }
+function updateJumpButtons(){
+  const top = document.getElementById('jumpTop'), bot = document.getElementById('jumpBottom');
+  if(!top || !bot) return;
+  const y = window.scrollY, max = document.documentElement.scrollHeight - window.innerHeight;
+  top.classList.toggle('off', y < 120);
+  bot.classList.toggle('off', max - y < 120);
+}
+window.addEventListener('scroll', updateJumpButtons, { passive:true });
+window.addEventListener('resize', updateJumpButtons);
+setTimeout(updateJumpButtons, 500);
+function insertRowAbove(idx){ insertRowAt(idx); }
 /* Sort rows by their saved position (stable; products without one keep their place after the rest) */
 function sortRowsByPosition(){
   const indexed = rows.map((r,i)=>({ r, i, p: (typeof r.sortOrder === 'number' && isFinite(r.sortOrder)) ? r.sortOrder : Infinity }));
@@ -2439,7 +2511,7 @@ async function persistOrder(list){
    normal change-sync; on older databases fall back to the shared config list. */
 function commitOrder(){
   if(HAS_SORT_COLUMN) return;
-  productOrder = rows.filter(rowHasAnyValue).map(r=>String(r.id));
+  productOrder = rows.filter(isPlaced).map(r=>String(r.id));
   orderSavePending = true;
   scheduleConfigSave();
   scheduleAutosave();
@@ -2457,7 +2529,7 @@ function showOrderSetupNotice(show){
   const anchor = document.querySelector('.queue-bar') || document.body.firstChild;
   anchor.parentNode.insertBefore(el, anchor);
 }
-function orderSignature(list){ return list.filter(rowHasAnyValue).map(r=>String(r.id)).join(','); }
+function orderSignature(list){ return list.filter(isPlaced).map(r=>String(r.id)).join(','); }
 
 /* Move a product. insertBefore = position (0..rows.length) it should land in front of. */
 function moveRow(from, insertBefore){
@@ -2536,6 +2608,7 @@ function learnRowOptions(row){
 let copiedRowValues = null;
 const COPY_FIELD_IDX = flatFields.map((f,i)=>i).filter(i => flatFields[i].type !== "image");
 const NO_PASTE_FIELDS = ["SKU", "Barcode / EAN / UPC"];   // must stay unique per product
+const INSERT_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 12h12"/><path d="M8 5.5v5M5.5 8h5"/></svg>`;
 const COPY_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>`;
 const PASTE_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="11.5" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M8 6v5M5.8 8.8 8 11l2.2-2.2"/></svg>`;
 
@@ -2605,7 +2678,7 @@ function posKey(e, el, rIdx){
   else if(e.key === 'Escape'){ e.preventDefault(); el.value = rIdx + 1; el.blur(); }
 }
 function setPosition(rIdx, raw, el){
-  const filledCount = rows.filter(rowHasAnyValue).length;
+  const filledCount = rows.filter(isPlaced).length;
   let target = parseInt(String(raw).replace(/[^0-9]/g,''), 10);
   if(isNaN(target)){ if(el) el.value = rIdx + 1; return; }
   target = Math.max(1, Math.min(filledCount, target));
@@ -2730,8 +2803,8 @@ function renderBody(){
     rowNoTd.innerHTML = `
       <span class="rowtop">
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
-        <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${rowStarted ? posInputHTML(rIdx) : `<span class="pos-num">${rIdx+1}</span>`}
-        ${rowStarted ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
+        <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${isPlaced(row) ? posInputHTML(rIdx) : `<span class="pos-num">${rIdx+1}</span>`}
+        ${isPlaced(row) ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
         <button type="button" class="row-more" title="Row actions" onclick="openRowMenu(event, ${rIdx})">⋯</button>
       </span>
       <span class="rowbtns">
@@ -2740,6 +2813,7 @@ function renderBody(){
         <button class="icon" title="Copy values from row above" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>⇧</button>
         <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
         <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
+        ${isPlaced(row) ? `<button class="icon insrow" title="Insert a new product below this one" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>` : ``}
         ${rowStarted ? `<button class="icon copyrow" title="Copy this product's data (without photo)" onclick="copyRowData(${rIdx})">${COPY_ICON}</button>` : ``}
         ${copiedRowValues ? `<button class="icon pasterow" title="Paste copied product data here (keeps photo, SKU, Barcode)" onclick="pasteRowData(${rIdx})">${PASTE_ICON}</button>` : ``}
       </span>`;
@@ -2979,7 +3053,7 @@ function renderBody(){
     card.innerHTML = `
       <div class="mcard-select" onclick="event.stopPropagation()">
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
-        ${rowStarted ? posInputHTML(rIdx, 'mpos') : ``}
+        ${isPlaced(row) ? posInputHTML(rIdx, 'mpos') : ``}
       </div>
       <div class="mcard-thumb">${imgUrl ? `<img src="${imgUrl}" alt="">` : `<span class="mcard-noimg">No photo</span>`}</div>
       <div class="mcard-body">
@@ -2995,9 +3069,10 @@ function renderBody(){
         </div>
       </div>
       <div class="mcard-actions" onclick="event.stopPropagation()">
-        ${rowStarted ? `<div class="mcard-move mcard-move-ud">
+        ${isPlaced(row) ? `<div class="mcard-move mcard-move-ud">
           <button class="icon" title="Move up" onclick="moveRowUp(${rIdx})" ${rIdx===0?'disabled':''}>↑</button>
-          <button class="icon" title="Move down" onclick="moveRowDown(${rIdx})" ${(rIdx+1>=rows.length || !rowHasAnyValue(rows[rIdx+1]))?'disabled':''}>↓</button>
+          <button class="icon" title="Move down" onclick="moveRowDown(${rIdx})" ${(rIdx+1>=rows.length || !isPlaced(rows[rIdx+1]))?'disabled':''}>↓</button>
+          <button class="icon insrow" title="Insert a new product below" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>
         </div>` : ``}
         <div class="mcard-move">
           <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
@@ -4008,6 +4083,182 @@ function toggleMoreMenu(e){
 function closeMoreMenu(){ const m = document.getElementById('moreMenu'); if(m) m.classList.remove('show'); }
 document.addEventListener('click', e => { if(!e.target.closest('.more-wrap')) closeMoreMenu(); });
 window.addEventListener('scroll', closeMoreMenu, true);
+/* =====================================================================
+   EXPORT TO EXCEL WITH PHOTOS (.xlsx)
+   A CSV file can only hold text, so photos can't go in it. This builds a real
+   Excel workbook with each product's photo inside its row, barcodes kept as
+   full numbers (no 1.5E+12), Arabic right-aligned, frozen header and filters.
+   Uses JSZip (loaded only when you export) to write the file.
+   ===================================================================== */
+const JSZIP_SRCS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+];
+function loadJSZip(){
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  return JSZIP_SRCS.reduce((p, src) => p.catch(() => new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = src; sc.async = true;
+    sc.onload = () => window.JSZip ? res(window.JSZip) : rej(new Error('JSZip missing'));
+    sc.onerror = () => { sc.remove(); rej(new Error('load failed: ' + src)); };
+    document.head.appendChild(sc);
+  })), Promise.reject());
+}
+const XL_IMG_PX = 72;                  // photo size shown in Excel
+const XL_ROW_PX = XL_IMG_PX + 10;      // row height with a little breathing room
+const XL_NUMERIC = ["Pieces Number","Suitable For / Persons","Width","Length","Height","Depth","Diameter","Capacity","Regular Price"];
+function xlEsc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,''); }
+function xlCol(n){ let s=''; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+async function photoToJpeg(url){
+  const resp = await fetch(url, { mode:'cors', cache:'force-cache' });
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  const blob = await resp.blob();
+  const bmp = await createImageBitmap(blob);
+  const target = XL_IMG_PX * 2;                       // 2× for sharp screens
+  const scale = Math.min(1, target / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,w,h); ctx.drawImage(bmp, 0, 0, w, h);
+  if(bmp.close) bmp.close();
+  const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+  return { data: new Uint8Array(await out.arrayBuffer()), w, h };
+}
+async function exportExcel(){
+  const filled = rows.filter(rowHasAnyValue);
+  const picked = filled.filter(r => selectedRowIds.has(r.id));
+  const list = picked.length ? picked : filled;
+  if(!list.length){ showToast('There are no products to export yet'); return; }
+  if(exportExcel.busy) return; exportExcel.busy = true;
+  try{
+    showToast('Preparing Excel file…');
+    const JSZip = await loadJSZip();
+    const imgIdx = IDX["Product Image"];
+    const fields = flatFields.filter(f => f.type !== 'image');
+    // columns: Position | Photo | all fields | Photo link
+    const headers = ['#', 'Photo', ...fields.map(f => f.name), 'Photo link'];
+    const widths  = [6, 12, ...fields.map(f => Math.max(10, Math.min(46, Math.round((FIELD_WIDTHS[f.name] || 150) / 7)))), 40];
+
+    // ---- photos (a few at a time)
+    const photos = new Array(list.length).fill(null);
+    let done = 0; const total = list.filter(r => (r.values[imgIdx]||'').trim()).length;
+    const queue = list.map((r,i)=>({r,i})).filter(x => (x.r.values[imgIdx]||'').trim());
+    async function worker(){
+      while(queue.length){
+        const { r, i } = queue.shift();
+        try{ photos[i] = await photoToJpeg(r.values[imgIdx].trim()); }catch(e){ console.warn('Photo not included', e); }
+        done++; if(done % 5 === 0 || done === total) showToast(`Preparing Excel file… photos ${done} / ${total}`);
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(6, queue.length)}, worker));
+
+    // ---- sheet XML
+    const lastCol = xlCol(headers.length - 1);
+    let sd = `<row r="1" ht="30" customHeight="1">` + headers.map((h,c)=>`<c r="${xlCol(c)}1" s="1" t="inlineStr"><is><t>${xlEsc(h)}</t></is></c>`).join('') + `</row>`;
+    list.forEach((r, k) => {
+      const rn = k + 2;
+      const cells = [];
+      cells.push(`<c r="A${rn}" s="4"><v>${rows.indexOf(r) + 1}</v></c>`);
+      cells.push(`<c r="B${rn}" s="2" t="inlineStr"><is><t>${photos[k] ? '' : xlEsc((r.values[imgIdx]||'').trim() ? 'Photo unavailable' : 'No photo')}</t></is></c>`);
+      fields.forEach((f, j) => {
+        const ref = xlCol(j + 2) + rn;
+        const v = (r.values[IDX[f.name]] ?? '').toString().trim();
+        if(v === '') return;
+        if(XL_NUMERIC.includes(f.name) && /^-?\d+(\.\d+)?$/.test(v)) cells.push(`<c r="${ref}" s="${f.name==='Regular Price'?5:4}"><v>${v}</v></c>`);
+        else cells.push(`<c r="${ref}" s="${f.rtl ? 3 : 2}" t="inlineStr"><is><t xml:space="preserve">${xlEsc(v)}</t></is></c>`);
+      });
+      const link = (r.values[imgIdx]||'').trim();
+      if(link) cells.push(`<c r="${xlCol(headers.length-1)}${rn}" s="2" t="inlineStr"><is><t>${xlEsc(link)}</t></is></c>`);
+      sd += `<row r="${rn}" ht="${(XL_ROW_PX*0.75).toFixed(2)}" customHeight="1">${cells.join('')}</row>`;
+    });
+    const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetViews><sheetView workbookViewId="0"><pane xSplit="3" ySplit="1" topLeftCell="D2" activePane="bottomRight" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>
+<sheetData>${sd}</sheetData>
+<autoFilter ref="A1:${lastCol}${list.length+1}"/>
+<pageMargins left="0.5" right="0.5" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>
+<drawing r:id="rId1"/>
+</worksheet>`;
+
+    // ---- drawing (photos anchored in column B of each row)
+    const EMU = 9525;
+    const pics = []; const picRels = [];
+    let n = 0;
+    photos.forEach((p, k) => {
+      if(!p) return; n++;
+      const s = Math.min(XL_IMG_PX / p.w, XL_IMG_PX / p.h);
+      const w = Math.round(p.w * s), h = Math.round(p.h * s);
+      const offX = Math.round((84 - w) / 2), offY = Math.round((XL_ROW_PX - h) / 2);
+      pics.push(`<xdr:oneCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>${Math.max(0,offX)*EMU}</xdr:colOff><xdr:row>${k+1}</xdr:row><xdr:rowOff>${Math.max(0,offY)*EMU}</xdr:rowOff></xdr:from><xdr:ext cx="${w*EMU}" cy="${h*EMU}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${n+1}" name="Photo ${n}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${n}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${w*EMU}" cy="${h*EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`);
+      picRels.push(`<Relationship Id="rId${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${n}.jpeg"/>`);
+    });
+    const drawing = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${pics.join('')}</xdr:wsDr>`;
+
+    const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/></numFmts>
+<fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B1C1F"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFE2DED3"/></left><right style="thin"><color rgb="FFE2DED3"/></right><top style="thin"><color rgb="FFE2DED3"/></top><bottom style="thin"><color rgb="FFE2DED3"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="6">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center" wrapText="1" readingOrder="2"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+    const zip = new JSZip();
+    const put = (name, data) => zip.file(name, data, { createFolders:false });
+    put('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+    put('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+    put('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Products" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">Products!$A$1:$${lastCol}$${list.length+1}</definedName></definedNames></workbook>`);
+    put('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+    put('xl/styles.xml', styles);
+    put('xl/worksheets/sheet1.xml', sheet);
+    put('xl/worksheets/_rels/sheet1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`);
+    put('xl/drawings/drawing1.xml', drawing);
+    put('xl/drawings/_rels/drawing1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${picRels.join('')}</Relationships>`);
+    let m = 0;
+    photos.forEach(p => { if(p){ m++; put(`xl/media/image${m}.jpeg`, p.data); } });
+
+    const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const name = `cup-and-saucer-products-${stamp}${picked.length ? '-selected' : ''}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 8000);
+    const missing = total - n;
+    logActivity(`Exported ${list.length} product${list.length===1?'':'s'} to Excel with photos`);
+    showToast(`Exported ${list.length} product${list.length===1?'':'s'} with ${n} photo${n===1?'':'s'}${missing ? ` · ${missing} photo${missing===1?'':'s'} couldn't be loaded (link kept)` : ''}`);
+  }catch(e){
+    console.error('Excel export failed', e);
+    showToast('Excel export failed — check your internet connection and try again');
+  }finally{ exportExcel.busy = false; }
+}
+function toggleExportMenu(e){
+  e.stopPropagation();
+  const m = document.getElementById('exportMenu');
+  const open = !m.classList.contains('show');
+  document.querySelectorAll('.more-menu.show').forEach(x=>x.classList.remove('show'));
+  m.classList.toggle('show', open);
+  if(open){ const r = e.currentTarget.getBoundingClientRect(); m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8)) + 'px'; }
+}
+document.addEventListener('click', e => { if(!e.target.closest('.export-wrap')){ const m = document.getElementById('exportMenu'); if(m) m.classList.remove('show'); } });
+
 function copyAsCSV(){
   const header = flatFields.map(f => f.name);
   const csvRows = [header, ...rows.filter(rowHasAnyValue).map(r=>r.values)];
