@@ -699,6 +699,24 @@
   .row-menu button{gap:10px !important;}
   .row-menu .mi{width:16px;flex:0 0 16px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
   .row-menu .mi svg{width:13px;height:13px;}
+
+  /* export panel */
+  .export-panel{position:fixed;right:24px;top:24px;z-index:620;width:min(380px, calc(100vw - 32px));background:var(--white);border:1px solid var(--hairline-strong);border-radius:10px;box-shadow:0 18px 44px rgba(27,28,31,0.22);padding:16px 18px;display:none;}
+  .export-panel.show{display:block;}
+  .ep-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .ep-title{font-weight:600;font-size:14px;color:var(--ink);}
+  .ep-close{border:none;background:transparent;color:var(--ink-soft);font-size:14px;cursor:pointer;padding:2px 4px;}
+  .ep-msg{font-size:12.5px;color:var(--ink-soft);margin:6px 0 12px;line-height:1.45;word-break:break-word;}
+  .ep-bar{height:6px;border-radius:3px;background:var(--ivory-2);overflow:hidden;}
+  .ep-fill{height:100%;width:0;background:var(--brass);transition:width .25s ease;}
+  .export-panel[data-state="ready"] .ep-bar, .export-panel[data-state="error"] .ep-bar{display:none;}
+  .ep-actions{display:none;margin-top:4px;}
+  .export-panel[data-state="ready"] .ep-actions{display:block;}
+  .ep-download{display:inline-flex;align-items:center;justify-content:center;width:100%;height:40px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13.5px;}
+  .export-panel[data-state="error"] .ep-title{color:var(--danger);}
+  #bulkExportMenu{min-width:260px;}
+  #bulkExportMenu button small{display:block;font-size:11px;color:var(--ink-soft);margin-top:2px;}
+  @media (max-width:860px){ .export-panel{right:16px;left:16px;width:auto;top:calc(16px + env(safe-area-inset-top, 0px));} }
 </style>
 </head>
 <body>
@@ -905,7 +923,14 @@
   <button class="btn-brass" onclick="applyBulkField()">Apply</button>
   <span class="spacer"></span>
   <button class="btn-ghost" onclick="bulkDuplicate()">Duplicate Selected</button>
-  <button class="btn-ghost" onclick="copySelectedAsCSV()">Export Selected CSV</button>
+  <div class="more-wrap export-wrap">
+    <button class="btn-ghost" type="button" onclick="toggleExportMenu(event, 'bulkExportMenu')">⬇ Export Selected ▾</button>
+    <div class="more-menu" id="bulkExportMenu" role="menu">
+      <button type="button" onclick="this.parentNode.classList.remove('show'); exportExcel()"><b>Excel with photos</b> (.xlsx)<small>Only the ticked products</small></button>
+      <button type="button" onclick="this.parentNode.classList.remove('show'); exportCSV()"><b>CSV</b> (.csv)<small>Only the ticked products</small></button>
+      <button type="button" onclick="this.parentNode.classList.remove('show'); copySelectedAsCSV(event)"><b>Copy as CSV</b><small>To paste into a spreadsheet</small></button>
+    </div>
+  </div>
   <button class="btn-danger-ghost" onclick="bulkDelete()">Delete Selected</button>
   <button class="btn-ghost" onclick="clearSelection()">Clear Selection</button>
 </div>
@@ -3421,7 +3446,7 @@ function copySelectedAsCSV(){
   const selRows = rows.filter(r=>selectedRowIds.has(r.id)).map(r=>r.values);
   const csvRows = [header, ...selRows];
   const csv = csvRows.map(r => r.map(c => `"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
-  navigator.clipboard.writeText(csv).then(()=>flash(event.target,'Copied ✓'));
+  writeClipboard(csv).then(()=>showToast(`${selRows.length} selected product${selRows.length===1?'':'s'} copied as CSV`)).catch(()=>showToast('Copy failed — use Export instead'));
 }
 
 /* ========================================================================
@@ -4014,6 +4039,56 @@ document.addEventListener('keydown', e=>{
 /* Download products as a .csv file that opens correctly in Excel / Google Sheets / Numbers,
    Arabic included. Exports the selected products if any are ticked, otherwise every product,
    in the current order, with its position number. The file can be imported back with Import CSV. */
+/* =====================================================================
+   EXPORT PANEL — shows progress, and always gives a Download button.
+   Browsers can silently block a download that starts after a long wait
+   (no fresh click). So besides trying to start it automatically, the
+   finished file is offered as a real link you click — that always works.
+   ===================================================================== */
+let exportPanelUrl = null;
+function exportPanel(){
+  let p = document.getElementById('exportPanel');
+  if(p) return p;
+  p = document.createElement('div');
+  p.id = 'exportPanel'; p.className = 'export-panel'; p.setAttribute('role','status');
+  p.innerHTML = `<div class="ep-head"><span class="ep-title"></span><button type="button" class="ep-close" title="Close" onclick="closeExportPanel()">✕</button></div>
+    <div class="ep-msg"></div>
+    <div class="ep-bar"><div class="ep-fill"></div></div>
+    <div class="ep-actions"><a class="ep-download btn-brass" href="#" download>⬇ Download file</a></div>`;
+  document.body.appendChild(p);
+  return p;
+}
+function setExportPanel({ title, msg, pct, state }){
+  const p = exportPanel();
+  p.classList.add('show');
+  p.dataset.state = state || 'working';
+  if(title !== undefined) p.querySelector('.ep-title').textContent = title;
+  if(msg !== undefined) p.querySelector('.ep-msg').textContent = msg;
+  p.querySelector('.ep-fill').style.width = Math.max(0, Math.min(100, pct ?? 0)) + '%';
+}
+function closeExportPanel(){
+  const p = document.getElementById('exportPanel');
+  if(p){ p.classList.remove('show'); }
+  if(exportPanelUrl){ const u = exportPanelUrl; exportPanelUrl = null; setTimeout(()=>URL.revokeObjectURL(u), 1000); }
+  exportCancel = true;
+}
+let exportCancel = false;
+function deliverFile(blob, name, summary){
+  if(exportPanelUrl) URL.revokeObjectURL(exportPanelUrl);
+  const url = URL.createObjectURL(blob);
+  exportPanelUrl = url;
+  // 1) try to start the download right away
+  try{
+    const a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener'; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ console.warn('auto download failed', e); }
+  // 2) always offer a button too (works even if the browser blocked the automatic one)
+  const kb = blob.size > 1048576 ? (blob.size/1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(blob.size/1024)) + ' KB';
+  setExportPanel({ title:'Your file is ready', msg:`${summary} · ${name} (${kb}). If it didn't download automatically, click the button below.`, pct:100, state:'ready' });
+  const link = exportPanel().querySelector('.ep-download');
+  link.href = url; link.download = name;
+}
+
 function exportCSV(){
   const filled = rows.filter(rowHasAnyValue);
   const picked = filled.filter(r => selectedRowIds.has(r.id));
@@ -4031,13 +4106,8 @@ function exportCSV(){
   const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const name = `cup-and-saucer-products-${stamp}${picked.length ? '-selected' : ''}.csv`;
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name; a.style.display = 'none';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  deliverFile(blob, name, `${list.length} product${list.length===1?'':'s'} exported to CSV`);
   logActivity(`Exported ${list.length} product${list.length===1?'':'s'} to CSV`);
-  showToast(`Exported ${list.length} product${list.length===1?'':'s'} → ${name}`);
 }
 /* ---- Full-screen table ----
    Fills the whole window with the sheet (and hides the browser bars where the
@@ -4109,7 +4179,11 @@ const XL_NUMERIC = ["Pieces Number","Suitable For / Persons","Width","Length","H
 function xlEsc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,''); }
 function xlCol(n){ let s=''; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
 async function photoToJpeg(url){
-  const resp = await fetch(url, { mode:'cors', cache:'force-cache' });
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 20000);          // never wait forever on one photo
+  let resp;
+  try{ resp = await fetch(url, { mode:'cors', cache:'reload', signal: ctrl.signal }); }
+  finally{ clearTimeout(timer); }
   if(!resp.ok) throw new Error('HTTP ' + resp.status);
   const blob = await resp.blob();
   const bmp = await createImageBitmap(blob);
@@ -4129,7 +4203,8 @@ async function exportExcel(){
   if(!list.length){ showToast('There are no products to export yet'); return; }
   if(exportExcel.busy) return; exportExcel.busy = true;
   try{
-    showToast('Preparing Excel file…');
+    exportCancel = false;
+    setExportPanel({ title:'Preparing Excel file…', msg:'Loading the export tools…', pct:2 });
     const JSZip = await loadJSZip();
     const imgIdx = IDX["Product Image"];
     const fields = flatFields.filter(f => f.type !== 'image');
@@ -4145,7 +4220,8 @@ async function exportExcel(){
       while(queue.length){
         const { r, i } = queue.shift();
         try{ photos[i] = await photoToJpeg(r.values[imgIdx].trim()); }catch(e){ console.warn('Photo not included', e); }
-        done++; if(done % 5 === 0 || done === total) showToast(`Preparing Excel file… photos ${done} / ${total}`);
+        done++; setExportPanel({ title:'Preparing Excel file…', msg:`Adding photos: ${done} of ${total}`, pct: 5 + Math.round(done / Math.max(1,total) * 85) });
+        if(exportCancel) { queue.length = 0; }
       }
     }
     await Promise.all(Array.from({length: Math.min(6, queue.length)}, worker));
@@ -4233,31 +4309,35 @@ async function exportExcel(){
     let m = 0;
     photos.forEach(p => { if(p){ m++; put(`xl/media/image${m}.jpeg`, p.data); } });
 
+    if(exportCancel) throw new Error('cancelled');
+    setExportPanel({ title:'Preparing Excel file…', msg:'Building the workbook…', pct:92 });
     const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const d = new Date();
     const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const name = `cup-and-saucer-products-${stamp}${picked.length ? '-selected' : ''}.xlsx`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 8000);
     const missing = total - n;
+    deliverFile(blob, name, `${list.length} product${list.length===1?'':'s'} with ${n} photo${n===1?'':'s'}${missing ? ` (${missing} photo${missing===1?'':'s'} couldn't be loaded — link kept)` : ''}`);
     logActivity(`Exported ${list.length} product${list.length===1?'':'s'} to Excel with photos`);
-    showToast(`Exported ${list.length} product${list.length===1?'':'s'} with ${n} photo${n===1?'':'s'}${missing ? ` · ${missing} photo${missing===1?'':'s'} couldn't be loaded (link kept)` : ''}`);
   }catch(e){
     console.error('Excel export failed', e);
-    showToast('Excel export failed — check your internet connection and try again');
+    if(String(e && e.message) === 'cancelled'){ closeExportPanel(); }
+    else setExportPanel({ title:'Excel export failed', msg:'Something went wrong while building the file (' + (e && e.message ? e.message : 'unknown error') + '). Check your internet connection and try again, or use Export → CSV.', pct:0, state:'error' });
   }finally{ exportExcel.busy = false; }
 }
-function toggleExportMenu(e){
+function toggleExportMenu(e, id){
   e.stopPropagation();
-  const m = document.getElementById('exportMenu');
+  const m = document.getElementById(id || 'exportMenu');
   const open = !m.classList.contains('show');
   document.querySelectorAll('.more-menu.show').forEach(x=>x.classList.remove('show'));
   m.classList.toggle('show', open);
-  if(open){ const r = e.currentTarget.getBoundingClientRect(); m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8)) + 'px'; }
+  if(open){
+    const r = e.currentTarget.getBoundingClientRect();
+    const h = m.offsetHeight;
+    m.style.top = (r.bottom + h + 8 > window.innerHeight ? r.top - h - 6 : r.bottom + 6) + 'px';   // opens upward from the bottom bar
+    m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8)) + 'px';
+  }
 }
-document.addEventListener('click', e => { if(!e.target.closest('.export-wrap')){ const m = document.getElementById('exportMenu'); if(m) m.classList.remove('show'); } });
+document.addEventListener('click', e => { if(!e.target.closest('.export-wrap')) ['exportMenu','bulkExportMenu'].forEach(id => { const m = document.getElementById(id); if(m) m.classList.remove('show'); }); });
 
 function copyAsCSV(){
   const header = flatFields.map(f => f.name);
