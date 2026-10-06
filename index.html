@@ -434,7 +434,7 @@
      FIELD SYSTEM — one consistent look for every editable cell
      ===================================================================== */
   tbody td{vertical-align:top;padding:9px 8px;}
-  tbody td:has(.image-cell){padding:9px 12px;}
+  tbody td.td-img{padding:9px 12px;}
   thead tr.field th{vertical-align:bottom;padding:10px 10px;}
   .cellbox{position:relative;display:flex;align-items:stretch;min-height:36px;background:#FDFCF9;border:1px solid var(--hairline);border-radius:6px;transition:border-color .15s ease, box-shadow .15s ease, background-color .15s ease;}
   .cellbox:hover{border-color:var(--hairline-strong);}
@@ -640,7 +640,7 @@
      ROW HEIGHT FOLLOWS THE PHOTO SIZE
      ===================================================================== */
   #tbody td{padding-top:7px !important;padding-bottom:7px !important;}
-  #tbody td:has(.image-cell){padding-top:7px !important;padding-bottom:7px !important;}
+  #tbody td.td-img{padding-top:7px !important;padding-bottom:7px !important;}
   .rowno{padding-top:6px !important;padding-bottom:6px !important;vertical-align:top;}
   .img-thumb svg{width:min(26px, 52%);height:auto;}
   .row-more{display:none;width:20px;height:20px;padding:0;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--brass-dim);font-size:15px;line-height:1;cursor:pointer;align-items:center;justify-content:center;}
@@ -673,9 +673,9 @@
     box-shadow:0 12px 28px rgba(27,28,31,0.18), 0 0 0 3px rgba(199,167,100,0.18);margin:-1px;}
   .cellbox.has-more:not(.expanded)::after{content:'… more';position:absolute;right:6px;bottom:3px;padding:0 4px 0 22px;font-size:10.5px;font-weight:600;color:var(--brass-dim);
     background:linear-gradient(90deg, rgba(253,252,249,0), #FDFCF9 45%);pointer-events:none;border-radius:0 0 5px 0;}
-  .cellbox.has-more:not(.expanded):has(.translate-btn)::after{right:40px;}
-  .cellbox.has-more:not(.expanded):has(.rtl-field)::after{content:'المزيد …';right:auto;left:6px;padding:0 22px 0 4px;background:linear-gradient(270deg, rgba(253,252,249,0), #FDFCF9 45%);border-radius:0 0 0 5px;}
-  .cellbox.has-more:not(.expanded):has(.rtl-field):has(.translate-btn)::after{left:6px;}
+  .cellbox.has-more.has-btn:not(.expanded)::after{right:40px;}
+  .cellbox.has-more.is-rtl:not(.expanded)::after{content:'المزيد …';right:auto;left:6px;padding:0 22px 0 4px;background:linear-gradient(270deg, rgba(253,252,249,0), #FDFCF9 45%);border-radius:0 0 0 5px;}
+  .cellbox.has-more.is-rtl.has-btn:not(.expanded)::after{left:6px;}
   td.required-empty .cellbox.has-more::after{background:linear-gradient(90deg, rgba(251,241,239,0), #FBF1EF 45%);}
   .cellbox-multiline textarea.cell{cursor:text;}
   .cellbox.has-more:not(.expanded) textarea.cell{clip-path:inset(0 0 8px 0);}
@@ -717,6 +717,19 @@
   #bulkExportMenu{min-width:260px;}
   #bulkExportMenu button small{display:block;font-size:11px;color:var(--ink-soft);margin-top:2px;}
   @media (max-width:860px){ .export-panel{right:16px;left:16px;width:auto;top:calc(16px + env(safe-area-inset-top, 0px));} }
+  .ep-skip{display:none;margin-top:12px;}
+  .export-panel[data-state="working"] .ep-skip{display:block;}
+  .ep-skip button{width:100%;height:34px;font-size:12.5px;border:1px solid var(--hairline-strong);border-radius:6px;background:var(--white);color:var(--ink);cursor:pointer;}
+  .ep-skip button:hover{border-color:var(--brass);}
+
+  /* =====================================================================
+     SPEED: the browser sizes long-text boxes itself (no script re-measuring)
+     ===================================================================== */
+  :root{--text-cap:54px;}
+  body.rows-small{--text-cap:36px;}
+  html.fs-auto .cellbox textarea.cell{field-sizing:content;height:auto !important;min-height:36px;max-height:var(--text-cap);}
+  html.fs-auto .cellbox.expanded textarea.cell{max-height:320px;}
+  .img-thumb img, .mcard-thumb img{content-visibility:auto;}
 </style>
 </head>
 <body>
@@ -1425,18 +1438,48 @@ function applyRemoteRowChange(payload){
     history: r.history || []
   };
   const idx = rows.findIndex(row=>row.id===incoming.id);
-  if(idx===-1){ rows.push(incoming); }
-  else if(incoming.lastEditedAt >= (rows[idx].lastEditedAt||0)){
-    const onlyMoved = JSON.stringify(rows[idx].values) === JSON.stringify(incoming.values);
-    rows[idx] = incoming;
-    if(onlyMoved){ scheduleRender(); return; }   // a reorder touches many rows — redraw once
-  }
-  else {
-    // our copy of the content is newer, but the position still comes from the server
-    if(HAS_SORT_COLUMN && incoming.sortOrder !== (rows[idx].sortOrder ?? null)){ rows[idx].sortOrder = incoming.sortOrder; scheduleRender(); }
+  if(idx===-1){ rows.push(incoming); scheduleRender(); return; }
+  const cur = rows[idx];
+  const moved = HAS_SORT_COLUMN && incoming.sortOrder !== (cur.sortOrder ?? null);
+  if(incoming.lastEditedAt >= (cur.lastEditedAt||0)){
+    const sameContent = JSON.stringify(cur.values) === JSON.stringify(incoming.values);
+    const imageChanged = cur.values[IDX["Product Image"]] !== incoming.values[IDX["Product Image"]];
+    // keep the SAME object (the table's input handlers point at it) — just update its contents
+    Object.assign(cur, incoming);
+    if(moved){ scheduleRender(); return; }          // position changed → redraw once
+    if(sameContent) return;                          // our own save coming back → nothing to redraw
+    if(imageChanged || !patchRowInPlace(cur)) scheduleRender();
     return;
   }
-  renderBody();
+  // our copy of the content is newer, but the position still comes from the server
+  if(moved){ cur.sortOrder = incoming.sortOrder; scheduleRender(); }
+}
+/* Update one row's cells on screen without rebuilding the whole table. */
+function setCapacityUnit(td, on){
+  const box = td.querySelector('.cellbox'); if(!box) return;
+  const input = box.querySelector('input.cell'); if(!input) return;
+  let wrap = box.querySelector('.unit-wrap');
+  if(on){
+    if(!wrap){ wrap = document.createElement('div'); wrap.className = 'unit-wrap'; input.replaceWith(wrap); wrap.appendChild(input); }
+    if(!wrap.querySelector('.unit-suffix')){ const u = document.createElement('span'); u.className = 'unit-suffix'; u.textContent = 'ml'; wrap.appendChild(u); }
+  } else if(wrap){ const u = wrap.querySelector('.unit-suffix'); if(u) u.remove(); }
+}
+function patchRowInPlace(row){
+  if(isPhoneView()) return false;
+  const rIdx = rows.indexOf(row);
+  const tr = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`);
+  if(!tr) return false;
+  flatFields.forEach((f, cIdx) => {
+    if(f.type === 'image') return;
+    const el = tr.children[cIdx+1] && tr.children[cIdx+1].querySelector('.cell');
+    if(!el || el === document.activeElement) return;
+    const v = row.values[cIdx] || '';
+    if(el.value !== v) el.value = v;
+  });
+  refreshRowIndicators(rIdx, getDupeSets());
+  sizeTextareas(tr.querySelectorAll('textarea.cell'));
+  updateStats();
+  return true;
 }
 let renderTimer = null;
 function scheduleRender(){ clearTimeout(renderTimer); renderTimer = setTimeout(renderBody, 120); }
@@ -1446,7 +1489,9 @@ function startRealtime(){
     .on('postgres_changes', { event:'*', schema:'public', table:'products' }, applyRemoteRowChange)
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'app_config' }, payload=>{
       applyConfig(payload.new && payload.new.data);
-      renderBody();
+      // dropdown lists are read when a dropdown opens, so a settings update doesn't need a redraw
+      if(orderNeedsApply) scheduleRender();
+      else { try{ refreshFilterOptions(); }catch(e){} }
     })
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'activity_log' }, payload=>{
       const a = payload.new;
@@ -2288,27 +2333,45 @@ function gridTextCap(){
   const lines = document.body.classList.contains('rows-small') ? 1 : 2;
   return Math.max(36, Math.ceil(GRID_PAD_PX + lines * GRID_LINE_PX));
 }
+const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('field-sizing', 'content');
+if(FIELD_SIZING) document.documentElement.classList.add('fs-auto');
 function sizeGridText(el){
   const box = el.closest('.cellbox');
   const focused = document.activeElement === el;
-  if(focused && box && !box.classList.contains('expanded')){
-    box.style.height = box.getBoundingClientRect().height + 'px';   // freeze the row height
-    box.classList.add('expanded');
-  }
-  el.style.height = 'auto';
-  const full = Math.max(36, el.scrollHeight);
-  const cap = gridTextCap();
   if(focused){
-    el.style.height = full + 'px';
-  } else {
-    el.style.height = Math.min(full, cap) + 'px';
-    el.scrollTop = 0;
-    if(box){ box.classList.remove('expanded'); box.style.height = ''; }
+    if(box && !box.classList.contains('expanded')){
+      box.style.height = box.offsetHeight + 'px';          // freeze the row height
+      box.classList.add('expanded');
+    }
+    if(!FIELD_SIZING){ el.style.height = 'auto'; el.style.height = Math.max(36, el.scrollHeight) + 'px'; }
+    return;
   }
-  if(box) box.classList.toggle('has-more', full > cap + 1);
+  if(box){ box.classList.remove('expanded'); box.style.height = ''; }
+  el.scrollTop = 0;
+  sizeTextareas([el]);
+}
+/* Size many textareas with as few page re-layouts as possible (read everything, then write). */
+function sizeTextareas(list){
+  const els = Array.from(list);
+  if(!els.length) return;
+  const cap = gridTextCap();
+  if(FIELD_SIZING){
+    // the browser sizes the boxes itself; we only need to know which ones have hidden text
+    const over = els.map(el => el.scrollHeight > el.clientHeight + 2);           // read pass
+    els.forEach((el, i) => { const b = el.closest('.cellbox'); if(b) b.classList.toggle('has-more', over[i]); });   // write pass
+    return;
+  }
+  els.forEach(el => { el.style.height = '36px'; });                              // write
+  const full = els.map(el => Math.max(36, el.scrollHeight));                      // read (one layout)
+  els.forEach((el, i) => {                                                        // write
+    el.style.height = Math.min(full[i], cap) + 'px';
+    const b = el.closest('.cellbox'); if(b) b.classList.toggle('has-more', full[i] > cap + 1);
+  });
 }
 function autoGrowAll(root){
-  (root || document).querySelectorAll('textarea.cell, textarea.f-textarea').forEach(autoGrow);
+  const scope = root || document;
+  sizeTextareas(scope.querySelectorAll('textarea.cell'));
+  scope.querySelectorAll('textarea.f-textarea').forEach(autoGrow);
 }
 let _growRaf = null;
 window.addEventListener('resize', () => { cancelAnimationFrame(_growRaf); _growRaf = requestAnimationFrame(()=>autoGrowAll()); });
@@ -2801,6 +2864,9 @@ function setupRowDrag(){
   });
 }
 
+function isPhoneView(){ return window.matchMedia('(max-width:860px)').matches; }
+(function(){ const mq = window.matchMedia('(max-width:860px)'); const h = () => { if(typeof rows !== 'undefined') renderBody(); };
+  if(mq.addEventListener) mq.addEventListener('change', h); else if(mq.addListener) mq.addListener(h); })();
 function renderBody(){
   setupRowDrag();
   closeComboMenu();
@@ -2810,18 +2876,21 @@ function renderBody(){
   const mobileCards = document.getElementById('mobileCards');
   mobileCards.innerHTML = "";
   const dupeInfo = getDupeSets();
+  const phone = isPhoneView();
+  const tfrag = document.createDocumentFragment();
 
   rows.forEach((row, rIdx) => {
-    const tr = document.createElement('tr');
-    tr.dataset.rowIndex = rIdx;
-    if(selectedRowIds.has(row.id)) tr.classList.add('selected-row');
-
     const missing = rowMissingRequired(row);
     const dup = rowHasDupe(row, dupeInfo);
     const invalid = rowHasInvalid(row);
     const status = computeStatus(row);
     const pct = rowCompletionPct(row);
     const rowStarted = rowHasAnyValue(row); // false only for a completely untouched row — suppresses red highlighting
+
+   if(!phone){   // ---- desktop table row (skipped on phones, which show cards)
+    const tr = document.createElement('tr');
+    tr.dataset.rowIndex = rIdx;
+    if(selectedRowIds.has(row.id)) tr.classList.add('selected-row');
 
     const rowNoTd = document.createElement('td');
     rowNoTd.className = 'rowno';
@@ -2852,6 +2921,7 @@ function renderBody(){
 
       /* ---- image upload cell (uploads to Supabase Storage; stores the public URL) ---- */
       if(f.type === "image"){
+        td.classList.add('td-img');
         const wrap = document.createElement('div');
         wrap.className = 'image-cell';
         const thumbBtn = document.createElement('button');
@@ -2859,7 +2929,7 @@ function renderBody(){
         thumbBtn.className = 'img-thumb';
         thumbBtn.title = 'Upload from desktop';
         const imgUrl = row.values[cIdx];
-        thumbBtn.innerHTML = imgUrl ? `<img src="${imgUrl}" alt="">` : UPLOAD_ICON;
+        thumbBtn.innerHTML = imgUrl ? `<img src="${imgUrl}" alt="" loading="lazy" decoding="async">` : UPLOAD_ICON;
         const fileInput = document.createElement('input');
         fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
         thumbBtn.addEventListener('click', () => fileInput.click());
@@ -2985,13 +3055,21 @@ function renderBody(){
           addCategoryIfNew(row.values[cIdx]);
           if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
           if(IDX["Material"]>-1) row.values[IDX["Material"]] = "";
-          renderBody(); // full rebuild needed: Subcategory/Material options and disabled-field state depend on category
+          // options are looked up when a dropdown opens, so the row can be patched in place;
+          // only the capacity unit (ml) needs a redraw when it appears/disappears
+          const capCell = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`)?.children[IDX["Capacity"]+1];
+          const hadMl = !!(capCell && capCell.querySelector('.unit-suffix'));
+          const needsMl = CAPACITY_ML_CATEGORIES.includes(row.values[cIdx]);
+          if(hadMl !== needsMl && capCell){ setCapacityUnit(capCell, needsMl); }
+          if(!patchRowInPlace(row)) renderBody();
+          else { const sub = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`)?.children[IDX["Subcategory"]+1]?.querySelector('input.cell'); if(sub) sub.placeholder = row.values[cIdx] ? 'Select or type…' : 'Choose category first'; }
         } else {
           // Lightweight refresh only — never recreates input elements, so whichever
           // cell the user clicks into next keeps its focus and keystrokes correctly.
           updateStats();
           applyFilters();
-          refreshAllRowIndicators();
+          if(f.dupeCheck) refreshAllRowIndicators();          // SKU / barcode: duplicates can involve other rows
+          else refreshRowIndicators(rIdx, getDupeSets());   // everything else: just this row
         }
       });
 
@@ -3036,6 +3114,8 @@ function renderBody(){
       }
       const field = document.createElement('div');
       field.className = 'cellbox cellbox-' + (f.type === 'number' ? 'number' : (el.tagName === 'TEXTAREA' ? 'multiline' : 'text'));
+      if(cellContent.querySelector && cellContent.querySelector('.translate-btn')) field.classList.add('has-btn');
+      if(el.classList.contains('rtl-field')) field.classList.add('is-rtl');
       if(FIELD_WIDTHS[f.name]) field.style.width = FIELD_WIDTHS[f.name] + 'px';
       field.appendChild(cellContent);
       td.appendChild(field);
@@ -3060,8 +3140,9 @@ function renderBody(){
 
       tr.appendChild(td);
     });
-    tbody.appendChild(tr);
-
+    tfrag.appendChild(tr);
+   }
+   if(phone){   // ---- phone card (skipped on desktop)
     // ---- Mobile card (built from the same per-row values computed above, so it
     //      always stays perfectly in sync with the desktop grid, no extra work) ----
     const name = (row.values[IDX["Product Name EN"]] || "").trim();
@@ -3080,7 +3161,7 @@ function renderBody(){
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
         ${isPlaced(row) ? posInputHTML(rIdx, 'mpos') : ``}
       </div>
-      <div class="mcard-thumb">${imgUrl ? `<img src="${imgUrl}" alt="">` : `<span class="mcard-noimg">No photo</span>`}</div>
+      <div class="mcard-thumb">${imgUrl ? `<img src="${imgUrl}" alt="" loading="lazy" decoding="async">` : `<span class="mcard-noimg">No photo</span>`}</div>
       <div class="mcard-body">
         <div class="mcard-title${name?'':' untitled'}">${name || (rowStarted ? 'Untitled product' : 'Empty row')}</div>
         <div class="mcard-sub">${rowStarted ? subLine : 'Tap to start entering a product'}</div>
@@ -3109,7 +3190,9 @@ function renderBody(){
         </div>` : ``}
       </div>`;
     mobileCards.appendChild(card);
+   }
   });
+  tbody.appendChild(tfrag);
   if(!rows.length){
     mobileCards.innerHTML = `<div class="mcard-empty">No products yet — tap the + button to add one.</div>`;
   }
@@ -3152,9 +3235,13 @@ function updateBulkBar(){
    touches an input the user might be interacting with. ---- */
 function refreshAllRowIndicators(){
   const dupeInfo = getDupeSets();
-  rows.forEach((row, rIdx) => {
-    const tr = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`);
-    if(!tr) return;
+  rows.forEach((row, rIdx) => refreshRowIndicators(rIdx, dupeInfo));
+}
+function refreshRowIndicators(rIdx, dupeInfo){
+  {
+    const row = rows[rIdx];
+    const tr = document.getElementById('tbody').children[rIdx];
+    if(!row || !tr || tr.dataset.rowIndex !== String(rIdx)) return;
     const status = computeStatus(row);
     const pct = rowCompletionPct(row);
     const rowStarted = rowHasAnyValue(row);
@@ -3177,7 +3264,7 @@ function refreshAllRowIndicators(){
       td.classList.toggle('duplicate-val', isDup);
       td.classList.toggle('invalid-value', !disabled && isFieldInvalid(f, row.values[cIdx]));
     });
-  });
+  }
 }
 function refreshFocusedHeader(){
   const row = rows[focusedRowIdx];
@@ -4054,7 +4141,8 @@ function exportPanel(){
   p.innerHTML = `<div class="ep-head"><span class="ep-title"></span><button type="button" class="ep-close" title="Close" onclick="closeExportPanel()">✕</button></div>
     <div class="ep-msg"></div>
     <div class="ep-bar"><div class="ep-fill"></div></div>
-    <div class="ep-actions"><a class="ep-download btn-brass" href="#" download>⬇ Download file</a></div>`;
+    <div class="ep-actions"><a class="ep-download btn-brass" href="#" download>⬇ Download file</a></div>
+    <div class="ep-skip"><button type="button" class="btn-ghost" onclick="if(exportSkipPhotos) exportSkipPhotos()">Finish now without the remaining photos</button></div>`;
   document.body.appendChild(p);
   return p;
 }
@@ -4073,6 +4161,7 @@ function closeExportPanel(){
   exportCancel = true;
 }
 let exportCancel = false;
+let exportSkipPhotos = null;
 function deliverFile(blob, name, summary){
   if(exportPanelUrl) URL.revokeObjectURL(exportPanelUrl);
   const url = URL.createObjectURL(blob);
@@ -4178,22 +4267,41 @@ const XL_ROW_PX = XL_IMG_PX + 10;      // row height with a little breathing roo
 const XL_NUMERIC = ["Pieces Number","Suitable For / Persons","Width","Length","Height","Depth","Diameter","Capacity","Regular Price"];
 function xlEsc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,''); }
 function xlCol(n){ let s=''; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
-async function photoToJpeg(url){
+/* Every step of getting a photo has a time limit, so one slow or broken photo can
+   never stop the export. A smaller thumbnail is requested first when Supabase offers
+   one (much faster); otherwise the original photo is used. */
+function withTimeout(promise, ms, label){
+  let t; return Promise.race([promise, new Promise((_, rej) => { t = setTimeout(() => rej(new Error((label||'step') + ' timed out')), ms); })]).finally(() => clearTimeout(t));
+}
+async function fetchImageBlob(url, ms){
   const ctrl = new AbortController();
-  const timer = setTimeout(()=>ctrl.abort(), 20000);          // never wait forever on one photo
-  let resp;
-  try{ resp = await fetch(url, { mode:'cors', cache:'reload', signal: ctrl.signal }); }
-  finally{ clearTimeout(timer); }
-  if(!resp.ok) throw new Error('HTTP ' + resp.status);
-  const blob = await resp.blob();
-  const bmp = await createImageBitmap(blob);
+  const timer = setTimeout(() => ctrl.abort(), ms);        // covers the download of the whole photo
+  try{
+    const resp = await fetch(url, { mode:'cors', cache:'reload', signal: ctrl.signal });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const blob = await resp.blob();
+    if(!blob.size || !/^image\//.test(blob.type || 'image/')) throw new Error('not an image');
+    return blob;
+  } finally { clearTimeout(timer); }
+}
+function thumbUrl(url){
+  // Supabase Storage image transformation (only on plans that include it — falls back automatically)
+  if(!/\/storage\/v1\/object\/public\//.test(url)) return null;
+  return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + (url.includes('?') ? '&' : '?') + 'width=240&quality=75&resize=contain';
+}
+async function photoToJpeg(url){
+  let blob = null;
+  const small = thumbUrl(url);
+  if(small){ try{ blob = await fetchImageBlob(small, 8000); }catch(e){ blob = null; } }
+  if(!blob) blob = await fetchImageBlob(url, 25000);
+  const bmp = await withTimeout(createImageBitmap(blob), 10000, 'decode');
   const target = XL_IMG_PX * 2;                       // 2× for sharp screens
   const scale = Math.min(1, target / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,w,h); ctx.drawImage(bmp, 0, 0, w, h);
   if(bmp.close) bmp.close();
-  const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+  const out = await withTimeout(new Promise((r, j) => c.toBlob(x => x ? r(x) : j(new Error('encode failed')), 'image/jpeg', 0.86)), 8000, 'encode');
   return { data: new Uint8Array(await out.arrayBuffer()), w, h };
 }
 async function exportExcel(){
@@ -4216,15 +4324,22 @@ async function exportExcel(){
     const photos = new Array(list.length).fill(null);
     let done = 0; const total = list.filter(r => (r.values[imgIdx]||'').trim()).length;
     const queue = list.map((r,i)=>({r,i})).filter(x => (x.r.values[imgIdx]||'').trim());
+    let skipResolve; const skipPromise = new Promise(r => skipResolve = r);
+    exportSkipPhotos = () => { queue.length = 0; skipResolve(); };
+    const progress = () => setExportPanel({ title:'Preparing Excel file…', msg:`Adding photos: ${done} of ${total}`, pct: 5 + Math.round(done / Math.max(1,total) * 85), state:'working' });
     async function worker(){
       while(queue.length){
         const { r, i } = queue.shift();
-        try{ photos[i] = await photoToJpeg(r.values[imgIdx].trim()); }catch(e){ console.warn('Photo not included', e); }
-        done++; setExportPanel({ title:'Preparing Excel file…', msg:`Adding photos: ${done} of ${total}`, pct: 5 + Math.round(done / Math.max(1,total) * 85) });
+        try{ photos[i] = await withTimeout(photoToJpeg(r.values[imgIdx].trim()), 45000, 'photo'); }
+        catch(e){ console.warn('Photo not included:', r.values[imgIdx], e && e.message); }
+        done++; progress();
         if(exportCancel) { queue.length = 0; }
       }
     }
-    await Promise.all(Array.from({length: Math.min(6, queue.length)}, worker));
+    progress();
+    // finishes when all photos are done — or right away if "Finish now" is clicked
+    await Promise.race([ Promise.all(Array.from({length: Math.min(6, queue.length)}, worker)), skipPromise ]);
+    exportSkipPhotos = null;
 
     // ---- sheet XML
     const lastCol = xlCol(headers.length - 1);
