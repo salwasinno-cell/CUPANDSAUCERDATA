@@ -730,6 +730,12 @@
   html.fs-auto .cellbox textarea.cell{field-sizing:content;height:auto !important;min-height:36px;max-height:var(--text-cap);}
   html.fs-auto .cellbox.expanded textarea.cell{max-height:320px;}
   .img-thumb img, .mcard-thumb img{content-visibility:auto;}
+  /* fast table */
+  #tableScroll{overflow-anchor:none;}
+  tr.v-spacer td{padding:0 !important;border:none !important;background:transparent !important;}
+  tr.v-spacer td.rowno, tr.v-spacer:hover td{background:transparent !important;}
+  table.cols-locked{table-layout:fixed;min-width:0 !important;}
+  table.cols-locked th, table.cols-locked td{overflow:visible;}
 </style>
 </head>
 <body>
@@ -1148,6 +1154,7 @@ document.getElementById('statFields').textContent = flatFields.length;
    STATE
    ======================================================================== */
 let focusedRowIdx = 0;   // declared early: renderBody() reads it
+let initialLoadDone = false;
 let rows = [];              // [{ id, values, createdAt, createdBy, lastEditedAt, lastEditedBy }]
 let dynamicStaff = [];
 let dynamicCollections = ["Signature","Everyday Essentials","Ramadan","Christmas & Holidays","Summer","Gifting"];
@@ -1225,7 +1232,6 @@ function toProductRecord(row){
     updated_at: new Date(row.lastEditedAt || Date.now()).toISOString(),
     updated_by: row.lastEditedBy || currentUser || 'Unassigned',
     history: (row.history || []).slice(-20),
-    ...(HAS_SORT_COLUMN ? { sort_order: (row.sortOrder === null || row.sortOrder === undefined) ? null : row.sortOrder } : {})
   };
 }
 /* ---- Live save: text is saved ~0.7s after you stop typing (not only when you
@@ -1246,8 +1252,9 @@ function flushLiveSave(id){
   stampEdit(row);
   persistRow(row);
   scheduleAutosave();
+  if(HAS_SORT_COLUMN && typeof row.sortOrder !== 'number') scheduleEnsureOrder();
 }
-function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); try{ doAutosave(); }catch(e){} if(configSaveTimer){ clearTimeout(configSaveTimer); persistConfig(); } }
+function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); try{ doAutosave(); }catch(e){} if(orderFlushTimer){ clearTimeout(orderFlushTimer); flushOrder(); } if(configSaveTimer){ clearTimeout(configSaveTimer); persistConfig(); } }
 window.addEventListener('pagehide', flushAllLiveSaves);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'hidden') flushAllLiveSaves(); });
 
@@ -1256,6 +1263,8 @@ function persistRow(row){
   enqueueWrite(row.id, async ()=>{
     const { error } = await sb.from('products').upsert(toProductRecord(row));
     if(error) throw error;
+    row._onServer = true;
+    if(row._orderUnsaved) scheduleOrderFlush();      // a brand-new row now exists → save its position
     setSaveStatus('Saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
   });
 }
@@ -1272,6 +1281,8 @@ async function persistRowsBatch(rowsToSave){
   setSaveStatus(`Saving ${rowsToSave.length} product(s)…`);
   const { error } = await sb.from('products').upsert(rowsToSave.map(toProductRecord));
   if(error){ console.error('Batch save error', error); setSaveStatus('Sync error — will retry on next edit'); return; }
+  rowsToSave.forEach(r => { r._onServer = true; });
+  if(rowsToSave.some(r => r._orderUnsaved)) scheduleOrderFlush();
   setSaveStatus('Saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
 }
 async function persistDeleteRowsBatch(ids){
@@ -1291,13 +1302,10 @@ function syncRowsDiff(beforeRows, afterRows){
   const deletedIds = [];
   beforeMap.forEach((r,id)=>{ if(!afterMap.has(id)) deletedIds.push(id); });
   // rows whose position changed but whose content didn't → save just the position
-  const changedIds = new Set(changed.map(r=>r.id));
-  const moved = [];
   afterMap.forEach((r,id)=>{
     const b = beforeMap.get(id);
-    if(b && !changedIds.has(id) && (b.sortOrder ?? null) !== (r.sortOrder ?? null)) moved.push(r);
+    if(!b || (b.sortOrder ?? null) !== (r.sortOrder ?? null)) markOrderUnsaved(r);
   });
-  if(moved.length) persistOrder(moved);
   if(changed.length === 1 && !deletedIds.length){ persistRow(changed[0]); return; }
   if(changed.length) persistRowsBatch(changed);
   if(deletedIds.length) persistDeleteRowsBatch(deletedIds);
@@ -1385,7 +1393,13 @@ function deleteProductImageByUrl(url){
 
 /* ---- Initial data load ---- */
 async function fetchAllData(){
-  const { data: productRows, error: prodErr } = await sb.from('products').select('*').order('created_at', { ascending:true });
+  // products, settings and history load at the same time
+  const [prodRes, cfgRes, actRes] = await Promise.all([
+    sb.from('products').select('*').order('created_at', { ascending:true }).order('id', { ascending:true }),
+    sb.from('app_config').select('data').eq('id',1).maybeSingle(),
+    sb.from('activity_log').select('*').order('at', { ascending:false }).limit(200)
+  ]);
+  const { data: productRows, error: prodErr } = prodRes;
   if(prodErr){ console.error(prodErr); return false; }
   if(productRows && productRows.length){
     HAS_SORT_COLUMN = Object.prototype.hasOwnProperty.call(productRows[0], 'sort_order');
@@ -1395,7 +1409,7 @@ async function fetchAllData(){
   }
   showOrderSetupNotice(!HAS_SORT_COLUMN);
   rows = (productRows||[]).map(r => ({
-    id: r.id,
+    id: r.id, _onServer: true, _legacy: (r.sort_order === null || r.sort_order === undefined),
     sortOrder: (r.sort_order === null || r.sort_order === undefined) ? null : Number(r.sort_order),
     values: normalizeRowValues(r.values),
     createdAt: new Date(r.created_at).getTime(),
@@ -1405,10 +1419,10 @@ async function fetchAllData(){
     history: r.history || []
   }));
 
-  const { data: cfgRow } = await sb.from('app_config').select('data').eq('id',1).maybeSingle();
+  const cfgRow = cfgRes && cfgRes.data;
   applyConfig(cfgRow && cfgRow.data);
 
-  const { data: activityRows } = await sb.from('activity_log').select('*').order('at', { ascending:false }).limit(200);
+  const activityRows = actRes && actRes.data;
   activityLog = (activityRows||[]).map(a => ({ time: new Date(a.at).getTime(), text: a.text, user: a.actor }));
 
   return true;
@@ -1437,10 +1451,16 @@ function applyRemoteRowChange(payload){
     lastEditedAt: new Date(r.updated_at).getTime(), lastEditedBy: r.updated_by,
     history: r.history || []
   };
+  incoming._onServer = true;
   const idx = rows.findIndex(row=>row.id===incoming.id);
   if(idx===-1){ rows.push(incoming); scheduleRender(); return; }
   const cur = rows[idx];
+  if(orderIsLocked(cur)) incoming.sortOrder = cur.sortOrder;   // our own newer order wins until it's saved
+  incoming._orderUnsaved = cur._orderUnsaved;
   const moved = HAS_SORT_COLUMN && incoming.sortOrder !== (cur.sortOrder ?? null);
+  // live updates can arrive slightly out of order; once someone's reordering settles,
+  // double-check every position against the server so this screen matches exactly
+  if(moved){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 1500); }
   if(incoming.lastEditedAt >= (cur.lastEditedAt||0)){
     const sameContent = JSON.stringify(cur.values) === JSON.stringify(incoming.values);
     const imageChanged = cur.values[IDX["Product Image"]] !== incoming.values[IDX["Product Image"]];
@@ -1467,8 +1487,8 @@ function setCapacityUnit(td, on){
 function patchRowInPlace(row){
   if(isPhoneView()) return false;
   const rIdx = rows.indexOf(row);
-  const tr = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`);
-  if(!tr) return false;
+  const tr = vTrs.get(rIdx);
+  if(!tr){ updateStats(); return true; }     // not on screen — it's built fresh with the new data when scrolled to
   flatFields.forEach((f, cIdx) => {
     if(f.type === 'image') return;
     const el = tr.children[cIdx+1] && tr.children[cIdx+1].querySelector('.cell');
@@ -1512,6 +1532,7 @@ async function initApp(){
   let ok = false;
   try{ ok = await fetchAllData(); }catch(err){ console.error('Initial load error', err); }
   if(!ok){ loadState(); } // offline fallback: last snapshot saved to this browser
+  initialLoadDone = ok;
   renderBody();
   updateUndoRedoButtons();
   setSaveStatus(ok ? 'Synced ✓ · live' : 'Offline — showing local backup, will resync automatically');
@@ -1540,9 +1561,10 @@ const ROW_BUTTONS_MIN_THUMB = 84;   // the icon grid needs ~70px; below Large it
 function applyThumbSize(){
   const px = getThumbSize();
   document.documentElement.style.setProperty('--thumb-size', px + 'px');
+  if(typeof unlockColumns === 'function') unlockColumns();     // column widths change with the photo size
   document.body.classList.toggle('rows-compact', px < ROW_BUTTONS_MIN_THUMB);
   document.body.classList.toggle('rows-small', px <= 40);
-  requestAnimationFrame(()=>{ try{ autoGrowAll(document.getElementById('tbody')); }catch(e){} });
+  requestAnimationFrame(()=>{ try{ if(typeof vTrs !== 'undefined' && vTrs.size && !isPhoneView()) vRenderAll(); else autoGrowAll(document.getElementById('tbody')); }catch(e){} });
 }
 /* Row actions menu (used when the row is compact) */
 function openRowMenu(e, rIdx){
@@ -1767,7 +1789,7 @@ async function handleTranslateClick(btn, row, cIdx, sourceFieldName, onDone){
    ROW HELPERS
    ======================================================================== */
 function newRow(){
-  return { id: newId(), values: new Array(flatFields.length).fill(""), createdAt: Date.now(), createdBy: currentUser || 'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser || 'Unassigned' };
+  return { _mine: true, id: newId(), values: new Array(flatFields.length).fill(""), createdAt: Date.now(), createdBy: currentUser || 'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser || 'Unassigned' };
 }
 /* ========================================================================
    DESCRIPTION GENERATOR
@@ -1881,6 +1903,7 @@ async function handleGenerateDescriptionClick(btn, row, cIdx, onDone){
 function stampEdit(row){
   row.lastEditedAt = Date.now();
   row.lastEditedBy = currentUser || 'Unassigned';
+  row._mine = true;          // edited on this device → this device gives it a position if it has none
   if(currentUser) addStaffIfNew(currentUser);
 }
 function addStaffIfNew(name){
@@ -1894,7 +1917,7 @@ function addCategoryIfNew(val){
   if(!dynamicCategories.some(c=>c.toLowerCase()===v.toLowerCase())){ dynamicCategories.push(v); scheduleConfigSave(); }
 }
 function cloneRows(){
-  return rows.map(r => ({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:r.values.slice(), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
+  return rows.map(r => ({ id:r.id, _onServer:!!r._onServer, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:r.values.slice(), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
 }
 
 function addRow(){ mutateWithHistory('Added a new product row', ()=>{ rows.push(newRow()); }); }
@@ -2227,7 +2250,8 @@ const NAV_COLUMNS = flatFields.filter(f => f.type !== "image").map(f => f.name);
 
 function focusCellAt(rIdx, colName){
   if(rIdx<0 || rIdx>=rows.length) return false;
-  const tr = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`);
+  if(vView.indexOf(rIdx) === -1) return false;            // filtered out
+  const tr = ensureRowRendered(rIdx);
   if(!tr) return false;
   const cIdx = IDX[colName];
   const td = tr.children[cIdx+1]; // +1 for the rowno cell
@@ -2351,14 +2375,29 @@ function sizeGridText(el){
   sizeTextareas([el]);
 }
 /* Size many textareas with as few page re-layouts as possible (read everything, then write). */
+function estimateLines(el){
+  const v = el.value || '';
+  if(!v) return 0;
+  const box = el.closest('.cellbox');
+  const boxW = box ? (parseFloat(box.style.width) || 230) : 230;
+  const textW = Math.max(60, boxW - 22 - (box && box.classList.contains('has-btn') ? 34 : 0));
+  const charW = el.classList.contains('rtl-field') ? 6.4 : 6.9;          // average glyph width at 13px
+  const perLine = Math.max(8, Math.floor(textW / charW));
+  return v.split('\n').reduce((n, part) => n + Math.max(1, Math.ceil(part.length / perLine)), 0);
+}
 function sizeTextareas(list){
   const els = Array.from(list);
   if(!els.length) return;
   const cap = gridTextCap();
   if(FIELD_SIZING){
-    // the browser sizes the boxes itself; we only need to know which ones have hidden text
-    const over = els.map(el => el.scrollHeight > el.clientHeight + 2);           // read pass
-    els.forEach((el, i) => { const b = el.closest('.cellbox'); if(b) b.classList.toggle('has-more', over[i]); });   // write pass
+    // The browser sizes the boxes itself. Whether text is cut off ("… more") is estimated from
+    // the text length and the column width, so nothing has to be measured — that measuring
+    // was what made scrolling stutter.
+    const lines = document.body.classList.contains('rows-small') ? 1 : 2;
+    els.forEach(el => {
+      const b = el.closest('.cellbox'); if(!b) return;
+      b.classList.toggle('has-more', estimateLines(el) > lines);
+    });
     return;
   }
   els.forEach(el => { el.style.height = '36px'; });                              // write
@@ -2551,13 +2590,13 @@ function insertRowAt(index){
   commitOrder();
   requestAnimationFrame(()=>{
     const i = rows.indexOf(nr);
-    const tr = document.querySelector(`#tbody tr[data-row-index="${i}"]`);
+    const tr = ensureRowRendered(i, true);
     const card = document.querySelector(`.mcard[data-row-index="${i}"]`);
     const onPhone = card && getComputedStyle(card.parentNode).display !== 'none';
     const el = onPhone ? card : tr;
     if(!el) return;
     el.classList.add('just-moved'); setTimeout(()=>el.classList.remove('just-moved'), 1600);
-    el.scrollIntoView({ block:'center', behavior:'smooth' });
+    if(onPhone) el.scrollIntoView({ block:'center', behavior:'smooth' });
     if(!onPhone){ const first = tr.querySelector('textarea.cell, input.cell'); if(first) setTimeout(()=>first.focus({preventScroll:true}), 350); }
     showToast(`New product inserted at #${i+1} — the ones below moved down by one`);
   });
@@ -2577,23 +2616,95 @@ function insertRowAbove(idx){ insertRowAt(idx); }
 /* Sort rows by their saved position (stable; products without one keep their place after the rest) */
 function sortRowsByPosition(){
   const indexed = rows.map((r,i)=>({ r, i, p: (typeof r.sortOrder === 'number' && isFinite(r.sortOrder)) ? r.sortOrder : Infinity }));
-  indexed.sort((a,b)=> (a.p - b.p) || (a.i - b.i));
+  indexed.sort((a,b)=> (a.p - b.p) || (a.p === Infinity ? a.i - b.i : ((a.r.createdAt||0) - (b.r.createdAt||0)) || (String(a.r.id) < String(b.r.id) ? -1 : 1)));
   rows = indexed.map(x=>x.r);
 }
 /* Save positions to the database: one request for any number of products. */
-async function persistOrder(list){
+/* ---- Saving the product order ----
+   Every position change is collected here and written in ONE request, after any
+   brand-new rows have been created on the server. While our order is being saved
+   (and for a few seconds after) older updates arriving from the server cannot undo
+   it. Afterwards the order is re-checked against the server so all devices agree. */
+const orderUnsaved = new Set();
+let orderVersion = 0;          // bumps on every local position change
+let orderFlushTimer = null, orderFlushing = false, orderLockUntil = 0, orderReconcileTimer = null;
+function markOrderUnsaved(r){
+  if(typeof r.sortOrder !== 'number'){ r._orderUnsaved = false; orderUnsaved.delete(r.id); return; }   // empty rows at the bottom have no position
+  r._orderUnsaved = true; orderUnsaved.add(r.id); orderVersion++; scheduleOrderFlush();
+}
+function orderIsLocked(r){ return !!(r && (r._orderUnsaved || Date.now() < orderLockUntil)); }
+function scheduleOrderFlush(delay){
+  if(!HAS_SORT_COLUMN) return;
+  orderLockUntil = Math.max(orderLockUntil, Date.now() + 6000);
+  clearTimeout(orderFlushTimer);
+  orderFlushTimer = setTimeout(flushOrder, delay ?? 250);
+}
+async function flushOrder(){
+  if(!HAS_SORT_COLUMN || SUPABASE_NOT_CONFIGURED) return;
+  if(orderFlushing){ scheduleOrderFlush(400); return; }
+  const list = rows.filter(r => r._orderUnsaved && r._onServer && typeof r.sortOrder === 'number');
+  // rows not yet created on the server are saved by their own insert, then come back here
+  if(!list.length) return;
+  orderFlushing = true;
+  // wait for any content save already in flight for these rows
+  await Promise.all(list.map(r => writeQueues[r.id]).filter(Boolean)).catch(()=>{});
+  const sent = list.map(r => ({ r, v: r.sortOrder }));
+  const ok = await persistOrder(sent.map(x => x.r), sent.map(x => x.v));
+  orderFlushing = false;
+  if(ok){
+    sent.forEach(({ r, v }) => { if(r.sortOrder === v){ r._orderUnsaved = false; orderUnsaved.delete(r.id); } });
+    orderLockUntil = Date.now() + 3000;
+    clearTimeout(orderReconcileTimer);
+    orderReconcileTimer = setTimeout(reconcileOrder, 3500);
+  } else {
+    scheduleOrderFlush(4000);   // keep trying until it's saved
+  }
+  if(rows.some(r => r._orderUnsaved && r._onServer)) scheduleOrderFlush(300);
+}
+/* Give a position to products that don't have one yet (new products filled in on this
+   device, and older products saved before ordering existed). It never renumbers products
+   that already have a position — only the person who moves them does that — so two
+   devices can't fight over the order. New products go after the last numbered one. */
+function ensureOrderNumbers(){
+  if(!HAS_SORT_COLUMN || !initialLoadDone) return;
+  let max = 0;
+  rows.forEach(r => { if(typeof r.sortOrder === 'number' && isFinite(r.sortOrder)) max = Math.max(max, r.sortOrder); });
+  rows.forEach(r => {
+    if(!rowHasAnyValue(r) || typeof r.sortOrder === 'number') return;
+    if(!(r._mine || r._legacy)) return;          // another device created it — that device numbers it
+    max += 1; r.sortOrder = max; r._legacy = false; markOrderUnsaved(r);
+  });
+}
+let ensureTimer = null;
+function scheduleEnsureOrder(){ clearTimeout(ensureTimer); ensureTimer = setTimeout(ensureOrderNumbers, 600); }
+/* After saving, read the positions back from the server and adopt them, so every device ends up identical. */
+async function reconcileOrder(){
+  if(!HAS_SORT_COLUMN || SUPABASE_NOT_CONFIGURED) return;
+  if(orderFlushing || rows.some(r => r._orderUnsaved) || Date.now() < orderLockUntil){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 2000); return; }
+  const v0 = orderVersion;
+  const { data, error } = await sb.from('products').select('id,sort_order');
+  if(error || !Array.isArray(data)) return;
+  // something was moved while we were reading → this answer is already out of date; check again later
+  if(orderVersion !== v0 || orderFlushing || rows.some(r => r._orderUnsaved) || Date.now() < orderLockUntil){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 2000); return; }
+  const byId = new Map(data.map(d => [String(d.id), d.sort_order === null || d.sort_order === undefined ? null : Number(d.sort_order)]));
+  let changed = false;
+  rows.forEach(r => { const v = byId.get(String(r.id)); if(v !== undefined && v !== (r.sortOrder ?? null)){ r.sortOrder = v; changed = true; } });
+  if(changed) renderBody(); else scheduleEnsureOrder();
+}
+async function persistOrder(list, values){
   if(!HAS_SORT_COLUMN || !list.length || SUPABASE_NOT_CONFIGURED) return;
   setSaveStatus('Saving order…');
-  const ids = list.map(r=>r.id), orders = list.map(r=>r.sortOrder ?? null);
+  const ids = list.map(r=>r.id), orders = values || list.map(r=>r.sortOrder ?? null);
   let { error } = await sb.rpc('set_product_order', { p_ids: ids, p_orders: orders });
   if(error){
     // function not installed yet → update rows one by one (still saved, just more requests)
     console.warn('set_product_order unavailable, using per-row updates', error);
-    const results = await Promise.all(list.map(r => sb.from('products').update({ sort_order: r.sortOrder ?? null }).eq('id', r.id)));
+    const results = await Promise.all(list.map((r,i) => sb.from('products').update({ sort_order: orders[i] }).eq('id', r.id)));
     error = (results.find(x=>x.error) || {}).error || null;
   }
-  if(error){ console.error('Order save error', error); setSaveStatus('Order not saved — check connection'); return; }
+  if(error){ console.error('Order save error', error); setSaveStatus('Order not saved yet — retrying…'); return false; }
   setSaveStatus('Order saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+  return true;
 }
 /* Called after any reorder. With the new column, the positions were already saved by the
    normal change-sync; on older databases fall back to the shared config list. */
@@ -2775,11 +2886,11 @@ function setPosition(rIdx, raw, el){
   moveRow(rIdx, to < rIdx ? to : to + 1);
   // briefly highlight the product in its new place
   requestAnimationFrame(()=>{
-    const tr = document.querySelector(`#tbody tr[data-row-index="${to}"]`);
+    const tr = ensureRowRendered(to, true);
     const card = document.querySelector(`.mcard[data-row-index="${to}"]`);
     [tr, card].forEach(x=>{ if(!x) return; x.classList.add('just-moved'); setTimeout(()=>x.classList.remove('just-moved'), 1600); });
     if(card && getComputedStyle(card.parentNode).display !== 'none') card.scrollIntoView({block:'center', behavior:'smooth'});
-    else if(tr) tr.scrollIntoView({block:'center', behavior:'smooth'});
+    // (desktop: ensureRowRendered already scrolled the table to it)
   });
 }
 function moveRowDown(idx){ moveRow(idx, idx + 2); }
@@ -2840,7 +2951,7 @@ function setupRowDrag(){
   });
   tbody.addEventListener('dragover', e=>{
     if(dragFromIdx === null) return;
-    const tr = e.target.closest('tr'); if(!tr) return;
+    const tr = e.target.closest('tr'); if(!tr || tr.classList.contains('v-spacer')) return;
     e.preventDefault(); e.dataTransfer.dropEffect = 'move';
     const r = tr.getBoundingClientRect();
     const below = e.clientY > r.top + r.height/2;
@@ -2849,7 +2960,7 @@ function setupRowDrag(){
   });
   tbody.addEventListener('drop', e=>{
     if(dragFromIdx === null) return;
-    const tr = e.target.closest('tr'); if(!tr) return;
+    const tr = e.target.closest('tr'); if(!tr || tr.classList.contains('v-spacer')) return;
     e.preventDefault();
     const idx = parseInt(tr.dataset.rowIndex, 10);
     const below = tr.classList.contains('drop-below');
@@ -2867,27 +2978,188 @@ function setupRowDrag(){
 function isPhoneView(){ return window.matchMedia('(max-width:860px)').matches; }
 (function(){ const mq = window.matchMedia('(max-width:860px)'); const h = () => { if(typeof rows !== 'undefined') renderBody(); };
   if(mq.addEventListener) mq.addEventListener('change', h); else if(mq.addListener) mq.addListener(h); })();
-function renderBody(){
-  setupRowDrag();
-  closeComboMenu();
-  sortEmptyRowsLast();
-  const tbody = document.getElementById('tbody');
-  tbody.innerHTML = "";
-  const mobileCards = document.getElementById('mobileCards');
-  mobileCards.innerHTML = "";
-  const dupeInfo = getDupeSets();
-  const phone = isPhoneView();
-  const tfrag = document.createDocumentFragment();
+/* =====================================================================
+   FAST TABLE — only the rows you can see are built
+   The table keeps the full list in memory but puts only the visible rows
+   (plus a few above and below) on the page, with empty space standing in
+   for the rest. Scrolling builds the next rows instantly. This keeps the
+   sheet fast whether there are 50 products or 2,000.
+   ===================================================================== */
+const V_BUFFER = 8;                 // extra rows built above and below the visible area
+let vView = [];                     // row indices that pass the current search / filters, in order
+let vStart = 0, vEnd = 0;           // currently built range (positions in vView)
+let vRowH = 60;                     // measured row height
+let vTrs = new Map();               // rIdx -> <tr> currently on the page
+let vDupe = null;                   // duplicate info for this render
+let vGen = 0;                       // bumps on every full render
+let vBusy = false, vAgain = false;
+const tableScrollEl = () => document.getElementById('tableScroll');
 
-  rows.forEach((row, rIdx) => {
+function vSpacer(cls){
+  const tr = document.createElement('tr'); tr.className = 'v-spacer ' + cls;
+  const td = document.createElement('td'); td.colSpan = flatFields.length + 1; tr.appendChild(td);
+  return tr;
+}
+function vRange(){
+  const sc = tableScrollEl(), tbody = document.getElementById('tbody');
+  const scRect = sc.getBoundingClientRect(), bRect = tbody.getBoundingClientRect();
+  const topInBody = Math.max(0, scRect.top - bRect.top);            // how far down the body we are
+  const visH = Math.max(sc.clientHeight, 300);
+  let s = Math.floor(topInBody / vRowH) - V_BUFFER;
+  let e = Math.ceil((topInBody + visH) / vRowH) + V_BUFFER;
+  s = Math.max(0, Math.min(s, vView.length));
+  e = Math.max(s, Math.min(e, vView.length));
+  return [s, e];
+}
+function vSetSpacers(){
+  const tbody = document.getElementById('tbody');
+  const top = tbody.querySelector('.v-top td'), bot = tbody.querySelector('.v-bot td');
+  if(top) top.style.height = (vStart * vRowH) + 'px';
+  if(bot) bot.style.height = (Math.max(0, vView.length - vEnd) * vRowH) + 'px';
+  if(top) top.parentNode.style.display = vStart ? '' : 'none';
+  if(bot) bot.parentNode.style.display = vView.length - vEnd ? '' : 'none';
+}
+function vMeasure(){
+  const list = Array.from(vTrs.values());
+  if(!list.length) return;
+  let h = 0; list.forEach(tr => h += tr.offsetHeight);
+  const avg = h / list.length;
+  if(avg > 20 && Math.abs(avg - vRowH) > 0.5){ vRowH = avg; vSetSpacers(); }
+}
+/* Full rebuild of the visible rows (after data / order / filter changes). */
+function vRenderAll(){
+  vGen++;
+  const tbody = document.getElementById('tbody');
+  const active = document.activeElement;
+  const keepFocus = active && tbody.contains(active) ? { rIdx: parseInt(active.closest('tr')?.dataset.rowIndex, 10), col: active.closest('td') ? Array.prototype.indexOf.call(active.closest('tr').children, active.closest('td')) : -1, sel: [active.selectionStart, active.selectionEnd] } : null;
+  vDupe = getDupeSets();
+  vTrs = new Map();
+  tbody.textContent = '';
+  const frag = document.createDocumentFragment();
+  frag.appendChild(vSpacer('v-top'));
+  [vStart, vEnd] = vRange();
+  for(let p = vStart; p < vEnd; p++){
+    const rIdx = vView[p];
+    const tr = buildRowTr(rows[rIdx], rIdx, vDupe);
+    vTrs.set(rIdx, tr); frag.appendChild(tr);
+  }
+  frag.appendChild(vSpacer('v-bot'));
+  tbody.appendChild(frag);
+  vSetSpacers();
+  sizeTextareas(tbody.querySelectorAll('textarea.cell'));
+  if(!colsLocked && vTrs.size) lockColumns();
+  vMeasure();
+  if(keepFocus && vTrs.has(keepFocus.rIdx) && keepFocus.col > -1){
+    const el = vTrs.get(keepFocus.rIdx).children[keepFocus.col]?.querySelector('.cell');
+    if(el){ el.focus({ preventScroll:true }); try{ if(keepFocus.sel[0] != null) el.setSelectionRange(keepFocus.sel[0], keepFocus.sel[1]); }catch(e){} }
+  }
+}
+/* On scroll: add the rows coming into view and drop the ones far out of view.
+   Rows that stay are never touched, so whatever you're typing in keeps its focus. */
+function vUpdate(){
+  if(isPhoneView() || !vView) return;
+  if(vBusy){ vAgain = true; return; }
+  vBusy = true;
+  try{
+    const tbody = document.getElementById('tbody');
+    const top = tbody.querySelector('.v-top'), bot = tbody.querySelector('.v-bot');
+    if(!top || !bot){ vRenderAll(); return; }
+    let [s, e] = vRange();
+    // never drop the row being edited
+    const act = document.activeElement;
+    const actTr = act && tbody.contains(act) ? act.closest('tr') : null;
+    const actPos = actTr ? vView.indexOf(parseInt(actTr.dataset.rowIndex, 10)) : -1;
+    if(actPos > -1){ s = Math.min(s, actPos); e = Math.max(e, actPos + 1); }
+    if(s === vStart && e === vEnd) return;
+    if(e <= vStart || s >= vEnd){                               // no overlap: clear and start fresh
+      vTrs.forEach(tr => tr.remove()); vTrs = new Map(); vStart = s; vEnd = s;
+    }
+    // drop rows outside the new range
+    for(let p = vStart; p < Math.min(s, vEnd); p++){ const r = vView[p]; const tr = vTrs.get(r); if(tr){ tr.remove(); vTrs.delete(r); } }
+    for(let p = Math.max(e, vStart); p < vEnd; p++){ const r = vView[p]; const tr = vTrs.get(r); if(tr){ tr.remove(); vTrs.delete(r); } }
+    const added = [];
+    // rows above
+    if(s < vStart){
+      const frag = document.createDocumentFragment();
+      for(let p = s; p < Math.min(vStart, e); p++){ const r = vView[p]; const tr = buildRowTr(rows[r], r, vDupe); vTrs.set(r, tr); frag.appendChild(tr); added.push(tr); }
+      top.after(frag);
+    }
+    // rows below
+    if(e > vEnd){
+      const frag = document.createDocumentFragment();
+      for(let p = Math.max(vEnd, s); p < e; p++){ const r = vView[p]; const tr = buildRowTr(rows[r], r, vDupe); vTrs.set(r, tr); frag.appendChild(tr); added.push(tr); }
+      bot.before(frag);
+    }
+    vStart = s; vEnd = e;
+    vSetSpacers();
+    if(added.length){ const ta = []; added.forEach(tr => tr.querySelectorAll('textarea.cell').forEach(x => ta.push(x))); sizeTextareas(ta); }
+  } finally {
+    vBusy = false;
+    if(vAgain){ vAgain = false; requestAnimationFrame(vUpdate); }
+  }
+}
+let vRaf = 0;
+function vOnScroll(){ if(vRaf) return; vRaf = requestAnimationFrame(()=>{ vRaf = 0; vUpdate(); }); }
+document.addEventListener('DOMContentLoaded', ()=>{});
+(function(){
+  const sc = document.getElementById('tableScroll');
+  if(sc){ sc.addEventListener('scroll', vOnScroll, { passive:true }); }
+  window.addEventListener('scroll', vOnScroll, { passive:true });
+  window.addEventListener('resize', vOnScroll);
+})();
+/* Make sure a row is on the page (scrolling the table to it if needed); returns its <tr>. */
+function ensureRowRendered(rIdx, center){
+  if(isPhoneView()) return null;
+  let tr = vTrs.get(rIdx);
+  const pos = vView.indexOf(rIdx);
+  if(pos === -1) return tr || null;
+  const sc = tableScrollEl(), tbody = document.getElementById('tbody');
+  const bodyTopInContent = tbody.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+  const rowTop = bodyTopInContent + pos * vRowH;
+  const theadH = (document.querySelector('#tableScroll thead') || {}).offsetHeight || 0;
+  const viewTop = sc.scrollTop + theadH, viewBot = sc.scrollTop + sc.clientHeight;
+  if(!tr || rowTop < viewTop || rowTop + vRowH > viewBot){
+    sc.scrollTop = center ? Math.max(0, rowTop - sc.clientHeight / 2 + vRowH / 2) : (rowTop < viewTop ? rowTop - theadH : rowTop + vRowH - sc.clientHeight);
+    vUpdate();
+    tr = vTrs.get(rIdx);
+  }
+  return tr || null;
+}
+function getRowTr(rIdx){ return vTrs.get(rIdx) || null; }
+/* Lock the column widths once they're known, so adding or removing rows while scrolling
+   never makes the browser re-measure every column (the main cause of scroll stutter). */
+var colsLocked = false;
+function lockColumns(){
+  const table = document.querySelector('#tableScroll table');
+  const ths = document.querySelectorAll('#thead tr.field th');
+  if(!table || !ths.length || !vTrs.size) return;
+  const widths = Array.from(ths, th => Math.ceil(th.getBoundingClientRect().width));
+  if(widths.some(w => !w)) return;
+  let cg = table.querySelector('colgroup');
+  if(!cg){ cg = document.createElement('colgroup'); table.insertBefore(cg, table.firstChild); }
+  cg.innerHTML = widths.map(w => `<col style="width:${w}px">`).join('');
+  table.style.width = widths.reduce((a,b)=>a+b, 0) + 'px';
+  table.classList.add('cols-locked');
+  colsLocked = true;
+}
+function unlockColumns(){
+  const table = document.querySelector('#tableScroll table');
+  if(!table) return;
+  const cg = table.querySelector('colgroup'); if(cg) cg.remove();
+  table.style.width = '';
+  table.classList.remove('cols-locked');
+  colsLocked = false;
+}
+
+/* Builds ONE table row. The table only builds the rows you can see (plus a few above and
+   below), so it stays fast no matter how many products there are. */
+function buildRowTr(row, rIdx, dupeInfo){
     const missing = rowMissingRequired(row);
     const dup = rowHasDupe(row, dupeInfo);
     const invalid = rowHasInvalid(row);
     const status = computeStatus(row);
     const pct = rowCompletionPct(row);
     const rowStarted = rowHasAnyValue(row); // false only for a completely untouched row — suppresses red highlighting
-
-   if(!phone){   // ---- desktop table row (skipped on phones, which show cards)
     const tr = document.createElement('tr');
     tr.dataset.rowIndex = rIdx;
     if(selectedRowIds.has(row.id)) tr.classList.add('selected-row');
@@ -3057,12 +3329,12 @@ function renderBody(){
           if(IDX["Material"]>-1) row.values[IDX["Material"]] = "";
           // options are looked up when a dropdown opens, so the row can be patched in place;
           // only the capacity unit (ml) needs a redraw when it appears/disappears
-          const capCell = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`)?.children[IDX["Capacity"]+1];
+          const capCell = vTrs.get(rIdx)?.children[IDX["Capacity"]+1];
           const hadMl = !!(capCell && capCell.querySelector('.unit-suffix'));
           const needsMl = CAPACITY_ML_CATEGORIES.includes(row.values[cIdx]);
           if(hadMl !== needsMl && capCell){ setCapacityUnit(capCell, needsMl); }
           if(!patchRowInPlace(row)) renderBody();
-          else { const sub = document.querySelector(`#tbody tr[data-row-index="${rIdx}"]`)?.children[IDX["Subcategory"]+1]?.querySelector('input.cell'); if(sub) sub.placeholder = row.values[cIdx] ? 'Select or type…' : 'Choose category first'; }
+          else { const sub = vTrs.get(rIdx)?.children[IDX["Subcategory"]+1]?.querySelector('input.cell'); if(sub) sub.placeholder = row.values[cIdx] ? 'Select or type…' : 'Choose category first'; }
         } else {
           // Lightweight refresh only — never recreates input elements, so whichever
           // cell the user clicks into next keeps its focus and keystrokes correctly.
@@ -3140,9 +3412,29 @@ function renderBody(){
 
       tr.appendChild(td);
     });
-    tfrag.appendChild(tr);
-   }
-   if(phone){   // ---- phone card (skipped on desktop)
+    return tr;
+}
+function renderBody(){
+  setupRowDrag();
+  closeComboMenu();
+  sortEmptyRowsLast();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = "";
+  const mobileCards = document.getElementById('mobileCards');
+  mobileCards.innerHTML = "";
+  const dupeInfo = getDupeSets();
+  const phone = isPhoneView();
+  const tfrag = document.createDocumentFragment();
+
+  if(phone) rows.forEach((row, rIdx) => {
+    const missing = rowMissingRequired(row);
+    const dup = rowHasDupe(row, dupeInfo);
+    const invalid = rowHasInvalid(row);
+    const status = computeStatus(row);
+    const pct = rowCompletionPct(row);
+    const rowStarted = rowHasAnyValue(row); // false only for a completely untouched row — suppresses red highlighting
+
+   if(phone){   // ---- phone card (desktop rows are built on demand by buildRowTr)
     // ---- Mobile card (built from the same per-row values computed above, so it
     //      always stays perfectly in sync with the desktop grid, no extra work) ----
     const name = (row.values[IDX["Product Name EN"]] || "").trim();
@@ -3192,23 +3484,19 @@ function renderBody(){
     mobileCards.appendChild(card);
    }
   });
-  tbody.appendChild(tfrag);
+  scheduleEnsureOrder();
   if(!rows.length){
     mobileCards.innerHTML = `<div class="mcard-empty">No products yet — tap the + button to add one.</div>`;
   }
   document.getElementById('gridEmptyState').style.display = rows.length ? 'none' : 'flex';
-  autoGrowAll(document.getElementById('tbody'));
   updateStats();
-  applyFilters();
+  applyFilters(true);           // works out which rows match the search / filters, then builds the visible ones
   syncMirrorWidth();
 }
 
 function toggleRowSelect(id, checked){
   if(checked) selectedRowIds.add(id); else selectedRowIds.delete(id);
-  document.querySelectorAll('#tbody tr').forEach(tr=>{
-    const idx = parseInt(tr.dataset.rowIndex,10);
-    tr.classList.toggle('selected-row', selectedRowIds.has(rows[idx].id));
-  });
+  vTrs.forEach((tr, idx)=>{ tr.classList.toggle('selected-row', !!rows[idx] && selectedRowIds.has(rows[idx].id)); });
   document.querySelectorAll('#mobileCards .mcard').forEach(card=>{
     const idx = parseInt(card.dataset.rowIndex,10);
     const isSel = selectedRowIds.has(rows[idx].id);
@@ -3240,8 +3528,8 @@ function refreshAllRowIndicators(){
 function refreshRowIndicators(rIdx, dupeInfo){
   {
     const row = rows[rIdx];
-    const tr = document.getElementById('tbody').children[rIdx];
-    if(!row || !tr || tr.dataset.rowIndex !== String(rIdx)) return;
+    const tr = vTrs.get(rIdx);
+    if(!row || !tr) return;
     const status = computeStatus(row);
     const pct = rowCompletionPct(row);
     const rowStarted = rowHasAnyValue(row);
@@ -3331,7 +3619,7 @@ function updateSubcategoryFilterOptions(){
 }
 document.getElementById('fCategory').addEventListener('change', ()=>{ updateSubcategoryFilterOptions(); applyFilters(); });
 
-function applyFilters(){
+function applyFilters(forceRebuild){
   const q = (document.getElementById('searchBox').value || "").toLowerCase().trim();
   const onlyIncomplete = document.getElementById('onlyIncomplete').checked;
   const onlyDupes = document.getElementById('onlyDupes').checked;
@@ -3346,10 +3634,7 @@ function applyFilters(){
   const fNoDims = document.getElementById('fNoDims').checked;
   const fToday = document.getElementById('fToday').checked;
   const dupeInfo = getDupeSets();
-
-  document.querySelectorAll('#tbody tr, #mobileCards .mcard').forEach(tr=>{
-    const idx = parseInt(tr.dataset.rowIndex,10);
-    const row = rows[idx];
+  const pass = (row) => {
     let show = true;
     if(q) show = row.values.join(" ").toLowerCase().includes(q);
     if(show && onlyIncomplete) show = rowMissingRequired(row);
@@ -3367,10 +3652,21 @@ function applyFilters(){
     if(show && activeViewExtra==='noimage') show = !rowHasImage(row);
     if(show && activeViewExtra==='noarabic') show = rowMissingArabic(row);
     if(show && activeViewExtra==='ready') { const s=computeStatus(row); show = (s==='Ready'||s==='Published'); }
-    const wasHidden = tr.classList.contains('hidden-row');
-    tr.classList.toggle('hidden-row', !show);
-    if(wasHidden && show) autoGrowAll(tr); // textareas measure 0 while hidden
-  });
+    return show;
+  };
+  if(isPhoneView()){
+    document.querySelectorAll('#mobileCards .mcard').forEach(card=>{
+      const row = rows[parseInt(card.dataset.rowIndex,10)];
+      card.classList.toggle('hidden-row', !(row && pass(row)));
+    });
+    return;
+  }
+  const view = [];
+  rows.forEach((row, i) => { if(pass(row)) view.push(i); });
+  const same = !forceRebuild && view.length === vView.length && view.every((v,i) => v === vView[i]);
+  if(same) return;
+  vView = view;
+  vRenderAll();
 }
 function resetFilters(){
   activeViewExtra = null;
@@ -3432,9 +3728,8 @@ function goToNextIncomplete(){
   const idx = rows.findIndex(r => rowHasAnyValue(r) && computeStatus(r) === 'Incomplete');
   if(idx === -1){ flashQueueText('Nothing incomplete — nice work.'); return; }
   applyView('all');
-  const tr = document.querySelector(`#tbody tr[data-row-index="${idx}"]`);
+  const tr = ensureRowRendered(idx, true);
   if(tr){
-    tr.scrollIntoView({behavior:'smooth', block:'center'});
     tr.style.outline = '2px solid var(--brass)';
     setTimeout(()=>{ tr.style.outline = ''; }, 1500);
   }
@@ -4216,7 +4511,7 @@ function toggleSheetFullscreen(force){
     if(document.fullscreenElement && document.exitFullscreen){ document.exitFullscreen().catch(()=>{}); }
   }
   document.querySelectorAll('.btn-fullscreen').forEach(b => b.classList.toggle('active', on));
-  requestAnimationFrame(()=>{ try{ autoGrowAll(document.getElementById('tbody')); }catch(e){} if(typeof syncScrollMirror==='function') syncScrollMirror(); });
+  requestAnimationFrame(()=>{ try{ autoGrowAll(document.getElementById('tbody')); vUpdate(); }catch(e){} if(typeof syncScrollMirror==='function') syncScrollMirror(); });
 }
 // leaving browser full screen (Esc / F11) also leaves full-screen table mode
 document.addEventListener('fullscreenchange', ()=>{
