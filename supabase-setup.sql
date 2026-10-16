@@ -151,6 +151,43 @@ grant execute on function set_product_order(bigint[], double precision[]) to ano
 -- 3. Make the new column visible to the app right away
 notify pgrst, 'reload schema';
 
+-- ----------------------------------------------------------------------------
+-- 8. FIELD-BY-FIELD SAVING
+-- ----------------------------------------------------------------------------
+-- Save only the fields that changed, so two people editing different fields
+-- of the same product at the same time never overwrite each other.
+create or replace function patch_product_values(p_id bigint, p_idx int[], p_vals text[], p_updated_by text)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v  jsonb;
+  ts timestamptz := clock_timestamp();
+begin
+  select values into v from products where id = p_id for update;
+  if not found then
+    return null;                       -- product doesn't exist (the app will re-create it)
+  end if;
+  if v is null or jsonb_typeof(v) <> 'array' then v := '[]'::jsonb; end if;
+  for i in 1 .. coalesce(array_length(p_idx, 1), 0) loop
+    while jsonb_array_length(v) <= p_idx[i] loop
+      v := v || '[""]'::jsonb;
+    end loop;
+    v := jsonb_set(v, array[p_idx[i]::text], to_jsonb(coalesce(p_vals[i], '')));
+  end loop;
+  if coalesce(array_length(p_idx, 1), 0) > 0 then
+    update products set values = v, updated_at = ts, updated_by = p_updated_by where id = p_id;
+  end if;
+  return ts;
+end;
+$$;
+
+grant execute on function patch_product_values(bigint, int[], text[], text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
 -- ============================================================================
 -- Done. No staff accounts to create — just paste your Project URL + anon
 -- public key into the HTML file (near the top of the <script> section) and

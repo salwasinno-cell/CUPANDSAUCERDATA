@@ -736,6 +736,22 @@
   tr.v-spacer td.rowno, tr.v-spacer:hover td{background:transparent !important;}
   table.cols-locked{table-layout:fixed;min-width:0 !important;}
   table.cols-locked th, table.cols-locked td{overflow:visible;}
+  /* "not saved yet" warning */
+  .sync-warning{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);z-index:640;max-width:min(560px, calc(100vw - 32px));background:#7A2E26;color:#FFF5F2;border-radius:10px;padding:12px 18px;font-size:13px;line-height:1.45;box-shadow:0 14px 34px rgba(0,0,0,0.28);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;text-align:center;}
+  .sync-warning.show{opacity:1;transform:translate(-50%,0);}
+  .sync-warning b{display:block;margin-bottom:2px;}
+  @media (max-width:860px){ .sync-warning{bottom:calc(90px + env(safe-area-inset-bottom, 0px));} }
+  thead tr.field th{top:var(--group-h, 35px) !important;}
+  .app-version{color:#8E8F94;}
+  .update-bar{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:650;display:flex;align-items:center;gap:14px;background:var(--charcoal);color:#F1EFE8;border:1px solid var(--brass-dim);border-radius:10px;padding:10px 12px 10px 16px;font-size:13px;box-shadow:0 14px 34px rgba(0,0,0,0.3);max-width:calc(100vw - 24px);}
+  .update-bar button{background:var(--brass);color:var(--charcoal);border:none;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  @media (max-width:860px){ .update-bar{flex-direction:column;align-items:stretch;text-align:center;} }
+  /* light rows shown only during a fast flick */
+  tr.v-lite td{vertical-align:top;}
+  .lite-cell{height:36px;line-height:34px;padding:0 11px;border:1px solid var(--hairline);border-radius:6px;background:#FDFCF9;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;}
+  .lite-img{width:var(--thumb-size);height:var(--thumb-size);border-radius:6px;background:var(--ivory-2);overflow:hidden;}
+  .lite-img img{width:100%;height:100%;object-fit:cover;display:block;}
+  @media (max-width:860px){ .mcard{content-visibility:auto;contain-intrinsic-size:auto 160px;} }
 </style>
 </head>
 <body>
@@ -753,7 +769,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product</div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.16.2</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1046,6 +1062,35 @@
    (Supabase Dashboard → Project Settings → API). See the setup guide
    that was delivered alongside this file for the full step-by-step.
    ======================================================================== */
+/* ---- Version check: when a newer version of this page is uploaded, every open device
+   shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
+const APP_VERSION = '2026.10.16.2';
+async function checkForNewVersion(){
+  try{
+    if(location.protocol === 'file:') return;
+    const res = await fetch(location.pathname + '?v=' + Date.now(), { cache:'no-store' });
+    if(!res.ok) return;
+    const txt = await res.text();
+    const m = txt.match(/const APP_VERSION = '([^']+)'/);
+    if(m && m[1] !== APP_VERSION) showUpdateBar(m[1]);
+  }catch(e){}
+}
+function showUpdateBar(v){
+  if(document.getElementById('updateBar')) return;
+  const el = document.createElement('div'); el.id = 'updateBar'; el.className = 'update-bar';
+  el.innerHTML = `<span><b>A new version of this tool is available</b> (${v}). Reload to use it — your work is saved first.</span><button type="button" onclick="reloadToNewVersion()">Reload now</button>`;
+  document.body.appendChild(el);
+}
+async function reloadToNewVersion(){
+  try{ flushAllLiveSaves(); writeOutbox(); }catch(e){}
+  const t0 = Date.now();
+  while(typeof hasUnsavedWork === 'function' && hasUnsavedWork() && Date.now() - t0 < 6000) await new Promise(r => setTimeout(r, 200));
+  location.reload();
+}
+setTimeout(checkForNewVersion, 5000);
+setInterval(checkForNewVersion, 120000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') checkForNewVersion(); });
+
 const SUPABASE_URL = 'https://thcoiqgxcqbdlnpjnyyr.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_n46yu9uesrOYP66NxQWVXA_cqvlGfXJ';
 const IMAGE_BUCKET = 'product-images';
@@ -1209,24 +1254,32 @@ function scheduleReleaseEditing(id){
   }, 400); // short grace period so tabbing between cells in the same row doesn't count as "done editing"
 }
 /* ---- Backend (Supabase: real Postgres DB, Storage, Realtime — no login) ---- */
-const writeQueues = {};      // per-row write serialization, so edits to the same row never race each other
-function enqueueWrite(docId, fn){
-  const chain = (writeQueues[docId] || Promise.resolve()).then(fn).catch(err=>{
-    console.error('Sync error', docId, err);
-    setSaveStatus('Sync error — will retry on next edit');
-  });
-  writeQueues[docId] = chain;
-  return chain;
-}
+/* =====================================================================
+   SAVING — nothing typed is ever lost
+   • Every change waits in a queue until the server confirms it; if the
+     internet drops, it keeps retrying automatically.
+   • Only the fields that actually changed are sent, so two people editing
+     different fields of the same product never overwrite each other.
+   • Unsaved changes are also kept in this browser; if the tab is closed
+     or the computer restarts mid-save, they're sent the next time the
+     page opens.
+   ===================================================================== */
+const writeQueues = {};          // kept for order-saving (waits on in-flight writes per row)
+let HAS_PATCH_FN = true;         // false if patch_product_values() isn't installed yet (older database)
+const saveQueue = new Set();     // ids of products waiting to be saved
+const pendingDeletes = new Set();// ids waiting to be deleted on the server
+const deletedLocally = new Set();// ids deleted on this device (ignore late live updates for them)
+const deleteConfirmedAt = new Map(); // id -> time the server confirmed the delete
+let saveTimer = null, saveRunning = false, saveFailures = 0;
 function newId(){
   // Client-generated, collision-safe-enough id for a small internal team;
   // stays a plain JS number so existing inline onclick handlers keep working.
   return Date.now() * 1000 + Math.floor(Math.random() * 1000);
 }
-function toProductRecord(row){
+function toProductRecord(row, vals){
   return {
     id: row.id,
-    values: row.values,
+    values: vals || row.values,
     created_at: new Date(row.createdAt || Date.now()).toISOString(),
     created_by: row.createdBy || currentUser || 'Unassigned',
     updated_at: new Date(row.lastEditedAt || Date.now()).toISOString(),
@@ -1234,6 +1287,231 @@ function toProductRecord(row){
     history: (row.history || []).slice(-20),
   };
 }
+const sv = v => (v === undefined || v === null) ? '' : String(v);
+/* Server timestamp → microseconds, so updates can be put in the order the server made them. */
+function tsMicros(s){
+  if(!s) return 0;
+  const m = String(s).replace(' ', 'T').match(/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(.*)$/);
+  if(!m) return Date.parse(s) * 1000 || 0;
+  const base = Date.parse(m[1] + (m[3] && m[3] !== '' ? (/^[+-]\d\d$/.test(m[3]) ? m[3] + ':00' : m[3]) : 'Z'));
+  const frac = ((m[2] || '') + '000000').slice(0, 6);
+  return (isNaN(base) ? 0 : base * 1000) + parseInt(frac, 10);
+}
+function dirtyFields(row){
+  const out = [];
+  if(!row._saved){ row.values.forEach((v,i) => { if(sv(v) !== '') out.push(i); }); return out; }
+  for(let i = 0; i < row.values.length; i++) if(sv(row.values[i]) !== sv(row._saved[i])) out.push(i);
+  return out;
+}
+function rowNeedsSave(row){ return !row._onServer || dirtyFields(row).length > 0; }
+function hasUnsavedWork(){
+  return saveRunning || saveQueue.size > 0 || pendingDeletes.size > 0 || Object.keys(liveSaveRows).length > 0 || rows.some(rowNeedsSave);
+}
+
+/* Ask for a product to be saved (call after any change to it). */
+function persistRow(row){
+  if(!row) return;
+  saveQueue.add(row.id);
+  writeOutboxSoon();
+  scheduleSave(0);
+}
+function persistRowsBatch(list){ (list || []).forEach(r => saveQueue.add(r.id)); writeOutboxSoon(); scheduleSave(0); }
+function queueDelete(id){
+  saveQueue.delete(id);
+  pendingDeletes.add(id); deletedLocally.add(id);
+  writeOutboxSoon(); scheduleSave(0);
+}
+function persistDeleteRow(id){ queueDelete(id); }
+function persistDeleteRowsBatch(ids){ (ids || []).forEach(queueDelete); }
+function scheduleSave(delay){
+  if(SUPABASE_NOT_CONFIGURED) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(runSaves, delay || 0);
+}
+function isMissingFn(error){
+  return !!error && (error.code === 'PGRST202' || error.code === '42883' || /could not find the function|function .* does not exist/i.test(error.message || ''));
+}
+async function insertRows(list){
+  const sent = list.map(r => ({ r, vals: r.values.slice() }));
+  const recs = sent.map(x => { const rec = toProductRecord(x.r, x.vals); if(HAS_PATCH_FN) delete rec.updated_at; return rec; });
+  const { error } = await sb.from('products').upsert(recs);
+  if(error){ console.error('Insert failed', error); return false; }
+  sent.forEach(({ r, vals }) => {
+    r._onServer = true; r._saved = vals.map(sv);
+    if(dirtyFields(r).length) saveQueue.add(r.id);
+    if(r._orderUnsaved) scheduleOrderFlush();
+  });
+  return true;
+}
+async function patchRow(r){
+  const idx = dirtyFields(r);
+  if(!idx.length) return true;
+  const vals = idx.map(i => sv(r.values[i]));
+  if(HAS_PATCH_FN){
+    const { data, error } = await sb.rpc('patch_product_values', { p_id: r.id, p_idx: idx, p_vals: vals, p_updated_by: currentUser || 'Unassigned' });
+    if(!error){
+      if(data === null || data === undefined || data === false){
+        // the product isn't on the server any more (deleted on another device) → put it back with everything typed
+        r._onServer = false; r._saved = null; saveQueue.add(r.id);
+        return true;
+      }
+      idx.forEach((i, k) => { r._saved[i] = vals[k]; });
+      const t = tsMicros(data); if(t > (r._srvTs || 0)) r._srvTs = t;
+      return true;
+    }
+    if(isMissingFn(error)){ HAS_PATCH_FN = false; showOrderSetupNotice(true); }
+    else { console.error('Save failed', error); return false; }
+  }
+  // older database without the patch function: send the whole product
+  const merged = (r._saved ? r._saved.slice() : r.values.map(sv));
+  idx.forEach((i, k) => { merged[i] = vals[k]; });
+  const { error } = await sb.from('products').upsert(toProductRecord(r, merged));
+  if(error){ console.error('Save failed', error); return false; }
+  idx.forEach((i, k) => { r._saved[i] = vals[k]; });
+  return true;
+}
+async function runSaves(){
+  if(SUPABASE_NOT_CONFIGURED) return;
+  if(saveRunning){ scheduleSave(200); return; }
+  if(!saveQueue.size && !pendingDeletes.size) return;
+  saveRunning = true;
+  let failed = false;
+  setSaveStatus('Saving…');
+  try{
+    if(pendingDeletes.size){
+      const all = [...pendingDeletes];
+      for(let i = 0; i < all.length; i += 150){           // in batches, so very large deletes always go through
+        const ids = all.slice(i, i + 150);
+        const { error } = await sb.from('products').delete().in('id', ids);
+        if(error){ failed = true; console.error('Delete failed', error); }
+        else ids.forEach(id => { pendingDeletes.delete(id); deleteConfirmedAt.set(String(id), Date.now()); setTimeout(() => { deletedLocally.delete(id); deletedLocally.delete(String(id)); }, 6000); });
+      }
+    }
+    const list = [...saveQueue].map(id => rows.find(r => r.id === id)).filter(Boolean);
+    saveQueue.clear();
+    const fresh = list.filter(r => !r._onServer);
+    for(let i = 0; i < fresh.length; i += 200){
+      const chunk = fresh.slice(i, i + 200);
+      if(!(await insertRows(chunk))){ failed = true; chunk.forEach(r => saveQueue.add(r.id)); }
+    }
+    const existing = list.filter(r => r._onServer && !fresh.includes(r));
+    let p = 0;
+    await Promise.all(Array.from({ length: Math.min(6, existing.length) }, async () => {
+      while(p < existing.length && !failed){              // stop at the first failure (e.g. no internet) and retry soon
+        const r = existing[p++];
+        let ok = false;
+        try{ ok = await patchRow(r); }catch(e){ console.error(e); }
+        if(!ok){ failed = true; saveQueue.add(r.id); }
+        else if(rowNeedsSave(r)) saveQueue.add(r.id);       // more typing happened while it was saving
+      }
+    }));
+  }catch(e){ failed = true; console.error('Save error', e); }
+  saveRunning = false;
+  if(failed){
+    rows.forEach(r => { if(rowNeedsSave(r)) saveQueue.add(r.id); });
+    saveFailures++;
+    setSaveStatus('Not saved yet — retrying…');
+    showSyncWarning(true);
+    scheduleSave(Math.min(15000, 1500 * saveFailures));
+  } else {
+    saveFailures = 0;
+    if(saveQueue.size || pendingDeletes.size) scheduleSave(30);
+    else { showSyncWarning(false); setSaveStatus('All changes saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); }
+  }
+  writeOutbox();
+}
+/* safety net: every 15 s, anything that still differs from the server is queued again */
+setInterval(() => {
+  if(!initialLoadDone || SUPABASE_NOT_CONFIGURED) return;
+  rows.forEach(r => { if(rowNeedsSave(r) && !liveSaveRows[r.id]) saveQueue.add(r.id); });
+  if(saveQueue.size || pendingDeletes.size) scheduleSave(0);
+}, 15000);
+window.addEventListener('online', () => scheduleSave(0));
+
+function showSyncWarning(on){
+  let el = document.getElementById('syncWarning');
+  if(!on){ if(el) el.classList.remove('show'); return; }
+  if(!el){
+    el = document.createElement('div'); el.id = 'syncWarning'; el.className = 'sync-warning';
+    el.innerHTML = '<b>Some changes aren\'t saved yet.</b> Check the internet connection — the tool keeps retrying automatically. Keep this page open.';
+    document.body.appendChild(el);
+  }
+  el.classList.add('show');
+}
+
+/* ---- Outbox: unsaved changes are also kept in this browser ---- */
+const OUTBOX_KEY = 'cs_pde_outbox_v1';
+let outboxTimer = null;
+function writeOutboxSoon(){ clearTimeout(outboxTimer); outboxTimer = setTimeout(writeOutbox, 250); }
+function writeOutbox(){
+  clearTimeout(outboxTimer);
+  try{
+    const saves = {};
+    rows.forEach(r => {
+      if(!rowNeedsSave(r)) return;
+      if(!r._onServer){ saves[r.id] = { rec: { ...toProductRecord(r, r.values.slice()), sortOrder: r.sortOrder ?? null } }; return; }
+      const f = {};
+      dirtyFields(r).forEach(i => { f[i] = { v: sv(r.values[i]), base: sv(r._saved[i]) }; });
+      saves[r.id] = { f };
+    });
+    const deletes = [...pendingDeletes];
+    if(!Object.keys(saves).length && !deletes.length) localStorage.removeItem(OUTBOX_KEY);
+    else localStorage.setItem(OUTBOX_KEY, JSON.stringify({ t: Date.now(), saves, deletes }));
+  }catch(e){ /* storage full / private mode — server saving still works */ }
+}
+/* After loading from the server, re-apply anything that didn't finish saving last time. */
+function replayOutbox(){
+  let ob = null;
+  try{ ob = JSON.parse(localStorage.getItem(OUTBOX_KEY) || 'null'); }catch(e){}
+  if(!ob) return 0;
+  let n = 0;
+  (ob.deletes || []).forEach(id => {
+    const i = rows.findIndex(r => String(r.id) === String(id));
+    if(i > -1) rows.splice(i, 1);
+    pendingDeletes.add(typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id); deletedLocally.add(id); n++;
+  });
+  Object.entries(ob.saves || {}).forEach(([id, e]) => {
+    let r = rows.find(x => String(x.id) === String(id));
+    if(!r && e.rec){
+      r = { id: e.rec.id, values: normalizeRowValues(e.rec.values), sortOrder: e.rec.sortOrder ?? null,
+            createdAt: new Date(e.rec.created_at).getTime(), createdBy: e.rec.created_by,
+            lastEditedAt: new Date(e.rec.updated_at).getTime(), lastEditedBy: e.rec.updated_by,
+            history: e.rec.history || [], _onServer: false, _saved: null, _mine: true };
+      rows.push(r); if(typeof r.sortOrder === 'number') markOrderUnsaved(r);
+      saveQueue.add(r.id); n++; return;
+    }
+    if(!r || !e.f) return;
+    Object.entries(e.f).forEach(([i, x]) => {
+      const cur = sv(r.values[i]);
+      // only re-apply if nobody else changed that field on the server in the meantime
+      if(cur === x.base && cur !== x.v){ r.values[i] = x.v; n++; }
+    });
+    if(rowNeedsSave(r)) saveQueue.add(r.id);
+  });
+  if(saveQueue.size || pendingDeletes.size) scheduleSave(300);
+  return n;
+}
+window.addEventListener('beforeunload', e => {
+  flushAllLiveSaves();
+  writeOutbox();
+  if(hasUnsavedWork()){ e.preventDefault(); e.returnValue = ''; return ''; }
+});
+
+/* After any local change: save what changed, delete what was removed. */
+function syncRowsDiff(beforeRows, afterRows){
+  try{ const bm = new Map(beforeRows.map(r=>[r.id,r])); afterRows.forEach(r=>{ const b=bm.get(r.id); if(!b || JSON.stringify(b.values)!==JSON.stringify(r.values)) learnRowOptions(r); }); }catch(e){ console.warn(e); }
+  const beforeMap = new Map(beforeRows.map(r=>[r.id,r]));
+  const afterMap = new Map(afterRows.map(r=>[r.id,r]));
+  afterMap.forEach((r,id)=>{
+    const b = beforeMap.get(id);
+    if(!b || !r._onServer || JSON.stringify(b.values)!==JSON.stringify(r.values)) saveQueue.add(id);
+    if(!b || (b.sortOrder ?? null) !== (r.sortOrder ?? null)) markOrderUnsaved(r);
+  });
+  beforeMap.forEach((r,id)=>{ if(!afterMap.has(id)) queueDelete(id); });
+  writeOutboxSoon();
+  scheduleSave(0);
+}
+
 /* ---- Live save: text is saved ~0.7s after you stop typing (not only when you
    leave the field), and anything pending is flushed if the page is closed,
    hidden, or the phone switches apps. ---- */
@@ -1244,6 +1522,7 @@ function liveSave(row){
   clearTimeout(liveSaveTimers[row.id]);
   setSaveStatus('Saving…');
   liveSaveTimers[row.id] = setTimeout(()=>flushLiveSave(row.id), 700);
+  writeOutboxSoon();
 }
 function flushLiveSave(id){
   clearTimeout(liveSaveTimers[id]); delete liveSaveTimers[id];
@@ -1254,74 +1533,93 @@ function flushLiveSave(id){
   scheduleAutosave();
   if(HAS_SORT_COLUMN && typeof row.sortOrder !== 'number') scheduleEnsureOrder();
 }
-function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); try{ doAutosave(); }catch(e){} if(orderFlushTimer){ clearTimeout(orderFlushTimer); flushOrder(); } if(configSaveTimer){ clearTimeout(configSaveTimer); persistConfig(); } }
+function flushAllLiveSaves(){ Object.keys(liveSaveRows).forEach(flushLiveSave); writeOutbox(); if(saveQueue.size || pendingDeletes.size){ clearTimeout(saveTimer); runSaves(); } try{ doAutosave(); }catch(e){} if(orderFlushTimer){ clearTimeout(orderFlushTimer); flushOrder(); } if(configSaveTimer){ clearTimeout(configSaveTimer); persistConfig(); } }
 window.addEventListener('pagehide', flushAllLiveSaves);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'hidden') flushAllLiveSaves(); });
 
-function persistRow(row){
-  setSaveStatus('Saving…');
-  enqueueWrite(row.id, async ()=>{
-    const { error } = await sb.from('products').upsert(toProductRecord(row));
-    if(error) throw error;
-    row._onServer = true;
-    if(row._orderUnsaved) scheduleOrderFlush();      // a brand-new row now exists → save its position
-    setSaveStatus('Saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-  });
-}
-function persistDeleteRow(id){
-  enqueueWrite(id, async ()=>{
-    const { error } = await sb.from('products').delete().eq('id', id);
-    if(error) throw error;
-  });
-}
-/* One request for many rows at once — used for CSV import, bulk edit/duplicate/delete,
-   and undo/redo, instead of firing a separate request per row. */
-async function persistRowsBatch(rowsToSave){
-  if(!rowsToSave.length) return;
-  setSaveStatus(`Saving ${rowsToSave.length} product(s)…`);
-  const { error } = await sb.from('products').upsert(rowsToSave.map(toProductRecord));
-  if(error){ console.error('Batch save error', error); setSaveStatus('Sync error — will retry on next edit'); return; }
-  rowsToSave.forEach(r => { r._onServer = true; });
-  if(rowsToSave.some(r => r._orderUnsaved)) scheduleOrderFlush();
-  setSaveStatus('Saved ✓ · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-}
-async function persistDeleteRowsBatch(ids){
-  if(!ids.length) return;
-  const { error } = await sb.from('products').delete().in('id', ids);
-  if(error) console.error('Batch delete error', error);
-}
-function syncRowsDiff(beforeRows, afterRows){
-  try{ const bm = new Map(beforeRows.map(r=>[r.id,r])); afterRows.forEach(r=>{ const b=bm.get(r.id); if(!b || JSON.stringify(b.values)!==JSON.stringify(r.values)) learnRowOptions(r); }); }catch(e){ console.warn(e); }
-  const beforeMap = new Map(beforeRows.map(r=>[r.id,r]));
-  const afterMap = new Map(afterRows.map(r=>[r.id,r]));
-  const changed = [];
-  afterMap.forEach((r,id)=>{
-    const b = beforeMap.get(id);
-    if(!b || JSON.stringify(b.values)!==JSON.stringify(r.values) || b.lastEditedAt!==r.lastEditedAt) changed.push(r);
-  });
-  const deletedIds = [];
-  beforeMap.forEach((r,id)=>{ if(!afterMap.has(id)) deletedIds.push(id); });
-  // rows whose position changed but whose content didn't → save just the position
-  afterMap.forEach((r,id)=>{
-    const b = beforeMap.get(id);
-    if(!b || (b.sortOrder ?? null) !== (r.sortOrder ?? null)) markOrderUnsaved(r);
-  });
-  if(changed.length === 1 && !deletedIds.length){ persistRow(changed[0]); return; }
-  if(changed.length) persistRowsBatch(changed);
-  if(deletedIds.length) persistDeleteRowsBatch(deletedIds);
-}
 
 /* ---- Shared config (dynamic categories/materials/staff/SKU counter) — one synced row every staff member reads/writes ---- */
 let configSaveTimer = null;
 function scheduleConfigSave(){
+  configDirty = true;
   clearTimeout(configSaveTimer);
   configSaveTimer = setTimeout(persistConfig, 600);
 }
+/* Lists (categories, colors, brands, collections, staff…) are saved as "what this device
+   added / removed", merged into whatever is on the server — so two people adding things
+   at the same time both keep their additions. */
+let lastServerConfig = null, configDirty = false, configSaving = false;
+function localConfig(){
+  return JSON.parse(JSON.stringify({ catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY }));
+}
+function mergeList(base, local, server){
+  const low = x => String(x).toLowerCase();
+  local = Array.isArray(local) ? local : [];
+  if(!Array.isArray(server)) return local.slice();
+  base = Array.isArray(base) ? base : [];
+  const localSet = new Set(local.map(low)), baseSet = new Set(base.map(low));
+  const removed = new Set(base.filter(x => !localSet.has(low(x))).map(low));
+  const out = server.filter(x => !removed.has(low(x)));
+  const outSet = new Set(out.map(low));
+  local.forEach(x => { if(!baseSet.has(low(x)) && !outSet.has(low(x))){ out.push(x); outSet.add(low(x)); } });
+  return out;
+}
+function mergeMap(base, local, server){
+  base = base || {}; local = local || {}; server = server || {};
+  const out = {};
+  new Set([...Object.keys(server), ...Object.keys(local)]).forEach(k => {
+    const removedHere = (k in base) && !(k in local);
+    if(removedHere) return;
+    if(Array.isArray(local[k]) || Array.isArray(server[k])) out[k] = mergeList(base[k], local[k] || [], server[k]);
+    else out[k] = (k in local) ? local[k] : server[k];
+  });
+  return out;
+}
+function mergeConfig(base, local, server){
+  base = base || {}; server = server || {};
+  const out = Object.assign({}, server);
+  ['dynamicCategories','dynamicStaff','dynamicCollections'].forEach(k => { out[k] = mergeList(base[k], local[k], server[k]); });
+  ['customOptions','categorySubcatsOverride','materialsOverride'].forEach(k => { out[k] = mergeMap(base[k], local[k], server[k]); });
+  out.skuCounter = Math.max(server.skuCounter || 0, local.skuCounter || 0);
+  out.catalogVersion = Math.max(server.catalogVersion || 1, local.catalogVersion || 1);
+  out.productOrder = HAS_SORT_COLUMN ? (server.productOrder || []) : local.productOrder;
+  return out;
+}
 async function persistConfig(){
-  const data = { catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY };
-  const { error } = await sb.from('app_config').update({ data, updated_at: new Date().toISOString() }).eq('id', 1);
-  if(error) console.error('Config sync error', error);
-  else orderSavePending = false;
+  if(SUPABASE_NOT_CONFIGURED) return;
+  if(configSaving){ scheduleConfigSave(); return; }
+  configSaving = true;
+  const sent = localConfig();
+  try{
+    let merged = null;
+    for(let attempt = 0; attempt < 6 && !merged; attempt++){
+      const { data: cur, error: e1 } = await sb.from('app_config').select('data,updated_at').eq('id', 1).maybeSingle();
+      if(e1) throw e1;
+      const m = mergeConfig(lastServerConfig, sent, cur && cur.data);
+      // only write if nobody else saved since we read; otherwise read again and re-merge
+      let qy = sb.from('app_config').update({ data: m, updated_at: new Date(Math.max(Date.now(), tsMicros(cur && cur.updated_at)/1000 + 1)).toISOString() }).eq('id', 1);
+      if(cur && cur.updated_at) qy = qy.eq('updated_at', cur.updated_at);
+      const { data: upd, error } = await qy.select('updated_at');
+      if(error) throw error;
+      if(Array.isArray(upd) && upd.length) merged = m;
+      else await new Promise(res => setTimeout(res, 120 + Math.random() * 300));
+    }
+    if(!merged) throw new Error('settings busy — retrying');
+    // bring in what others added, without undoing anything typed here during the save
+    const now = localConfig();
+    const result = mergeConfig(sent, now, merged);
+    lastServerConfig = merged;
+    orderSavePending = false;
+    applyConfig(result);
+    configSaving = false;
+    if(JSON.stringify(mergeConfig(merged, now, merged)) !== JSON.stringify(merged)) scheduleConfigSave();
+    else configDirty = false;
+    try{ refreshFilterOptions(); }catch(e){}
+  }catch(err){
+    configSaving = false;
+    console.error('Config sync error', err);
+    clearTimeout(configSaveTimer); configSaveTimer = setTimeout(persistConfig, 4000);    // keep retrying
+  }
 }
 function applyConfig(data){
   if(!data) return;
@@ -1394,10 +1692,11 @@ function deleteProductImageByUrl(url){
 /* ---- Initial data load ---- */
 async function fetchAllData(){
   // products, settings and history load at the same time
-  const [prodRes, cfgRes, actRes] = await Promise.all([
+  const [prodRes, cfgRes, actRes, patchRes] = await Promise.all([
     sb.from('products').select('*').order('created_at', { ascending:true }).order('id', { ascending:true }),
     sb.from('app_config').select('data').eq('id',1).maybeSingle(),
-    sb.from('activity_log').select('*').order('at', { ascending:false }).limit(200)
+    sb.from('activity_log').select('*').order('at', { ascending:false }).limit(200),
+    Promise.resolve().then(() => sb.rpc('patch_product_values', { p_id: -1, p_idx: [], p_vals: [], p_updated_by: 'check' })).catch(e => ({ error: e }))
   ]);
   const { data: productRows, error: prodErr } = prodRes;
   if(prodErr){ console.error(prodErr); return false; }
@@ -1407,9 +1706,8 @@ async function fetchAllData(){
     const probe = await sb.from('products').select('sort_order').limit(1);
     HAS_SORT_COLUMN = !probe.error;
   }
-  showOrderSetupNotice(!HAS_SORT_COLUMN);
   rows = (productRows||[]).map(r => ({
-    id: r.id, _onServer: true, _legacy: (r.sort_order === null || r.sort_order === undefined),
+    id: r.id, _onServer: true, _srvTs: tsMicros(r.updated_at), _saved: normalizeRowValues(r.values).map(sv), _legacy: (r.sort_order === null || r.sort_order === undefined),
     sortOrder: (r.sort_order === null || r.sort_order === undefined) ? null : Number(r.sort_order),
     values: normalizeRowValues(r.values),
     createdAt: new Date(r.created_at).getTime(),
@@ -1419,7 +1717,10 @@ async function fetchAllData(){
     history: r.history || []
   }));
 
+  HAS_PATCH_FN = !(patchRes && patchRes.error);   // any problem with it → use the safe whole-product save instead
+  showOrderSetupNotice(!HAS_SORT_COLUMN || !HAS_PATCH_FN);
   const cfgRow = cfgRes && cfgRes.data;
+  lastServerConfig = cfgRow && cfgRow.data ? JSON.parse(JSON.stringify(cfgRow.data)) : null;
   applyConfig(cfgRow && cfgRow.data);
 
   const activityRows = actRes && actRes.data;
@@ -1430,7 +1731,8 @@ async function fetchAllData(){
 
 /* ---- Realtime sync: every staff member's browser reflects everyone else's edits within ~1s ---- */
 let realtimeChannel = null;
-function applyRemoteRowChange(payload){
+function applyRemoteRowChange(payload, fromSync){
+  if(!fromSync) scheduleSyncCheck(4000);      // after live activity settles, double-check against the server
   const incomingId = payload.eventType === 'DELETE' ? payload.old.id : payload.new.id;
   if(incomingId === editingRowId){
     // Someone is actively typing in this row right now — don't yank the row out from
@@ -1440,9 +1742,16 @@ function applyRemoteRowChange(payload){
   }
   if(payload.eventType === 'DELETE'){
     const idx = rows.findIndex(r=>r.id===payload.old.id);
-    if(idx!==-1){ rows.splice(idx,1); renderBody(); }
+    if(idx!==-1){
+      const r = rows[idx];
+      // deleted on another device while we still have unsaved typing in it → keep it (it will be re-created)
+      if(rowNeedsSave(r) && r._onServer){ r._onServer = false; r._saved = null; persistRow(r); return; }
+      rows.splice(idx,1); scheduleRender();
+    }
     return;
   }
+  // we deleted it: ignore late updates while the delete is going through (a re-creation, e.g. someone's Undo, is accepted)
+  if((deletedLocally.has(payload.new.id) || deletedLocally.has(String(payload.new.id))) && (pendingDeletes.has(payload.new.id) || payload.eventType !== 'INSERT')) return;
   const r = payload.new;
   const incoming = {
     id: r.id, sortOrder: (r.sort_order === null || r.sort_order === undefined) ? null : Number(r.sort_order),
@@ -1452,27 +1761,43 @@ function applyRemoteRowChange(payload){
     history: r.history || []
   };
   incoming._onServer = true;
+  incoming._srvTs = tsMicros(r.updated_at);
   const idx = rows.findIndex(row=>row.id===incoming.id);
-  if(idx===-1){ rows.push(incoming); scheduleRender(); return; }
+  if(idx===-1){ incoming._saved = incoming.values.map(sv); rows.push(incoming); scheduleRender(); return; }
   const cur = rows[idx];
+  if(cur._srvTs && incoming._srvTs && incoming._srvTs < cur._srvTs){
+    // an older copy arriving late — keep the newer one we already have (positions are handled separately)
+    if(HAS_SORT_COLUMN && !orderIsLocked(cur) && incoming.sortOrder !== (cur.sortOrder ?? null)){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 1500); }
+    return;
+  }
+  // Field-by-field merge: take the server's version of every field EXCEPT fields this
+  // device has changed and not saved yet — those keep what was typed here.
+  const serverVals = incoming.values.map(sv);
+  const localVals = cur.values.slice();
+  const keepLocal = cur._saved ? dirtyFields(cur) : localVals.map((_,i)=>i);   // not confirmed yet → keep everything local
+  incoming.values = serverVals.slice();
+  keepLocal.forEach(i => { incoming.values[i] = localVals[i]; });
+  incoming._saved = serverVals;
+  incoming._mine = cur._mine;
+  incoming.lastEditedAt = Math.max(incoming.lastEditedAt || 0, cur.lastEditedAt || 0);
   if(orderIsLocked(cur)) incoming.sortOrder = cur.sortOrder;   // our own newer order wins until it's saved
   incoming._orderUnsaved = cur._orderUnsaved;
   const moved = HAS_SORT_COLUMN && incoming.sortOrder !== (cur.sortOrder ?? null);
   // live updates can arrive slightly out of order; once someone's reordering settles,
   // double-check every position against the server so this screen matches exactly
   if(moved){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 1500); }
-  if(incoming.lastEditedAt >= (cur.lastEditedAt||0)){
-    const sameContent = JSON.stringify(cur.values) === JSON.stringify(incoming.values);
-    const imageChanged = cur.values[IDX["Product Image"]] !== incoming.values[IDX["Product Image"]];
+  {
+    const sameContent = localVals.every((v,i) => sv(v) === sv(incoming.values[i]));
+    const imageChanged = sv(localVals[IDX["Product Image"]]) !== sv(incoming.values[IDX["Product Image"]]);
     // keep the SAME object (the table's input handlers point at it) — just update its contents
+    const vals = incoming.values; delete incoming.values;
     Object.assign(cur, incoming);
+    vals.forEach((v,i) => { cur.values[i] = v; });
+    if(keepLocal.length && rowNeedsSave(cur)) persistRow(cur);
     if(moved){ scheduleRender(); return; }          // position changed → redraw once
     if(sameContent) return;                          // our own save coming back → nothing to redraw
     if(imageChanged || !patchRowInPlace(cur)) scheduleRender();
-    return;
   }
-  // our copy of the content is newer, but the position still comes from the server
-  if(moved){ cur.sortOrder = incoming.sortOrder; scheduleRender(); }
 }
 /* Update one row's cells on screen without rebuilding the whole table. */
 function setCapacityUnit(td, on){
@@ -1508,6 +1833,8 @@ function startRealtime(){
   realtimeChannel = sb.channel('products-sync')
     .on('postgres_changes', { event:'*', schema:'public', table:'products' }, applyRemoteRowChange)
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'app_config' }, payload=>{
+      if(configDirty || configSaving) return;          // our own merge-save will bring these in
+      lastServerConfig = payload.new && payload.new.data ? JSON.parse(JSON.stringify(payload.new.data)) : lastServerConfig;
       applyConfig(payload.new && payload.new.data);
       // dropdown lists are read when a dropdown opens, so a settings update doesn't need a redraw
       if(orderNeedsApply) scheduleRender();
@@ -1520,7 +1847,7 @@ function startRealtime(){
       if(activityLog.length>200) activityLog.length = 200;
       if(document.getElementById('historyDrawer').classList.contains('show')) renderHistory();
     })
-    .subscribe();
+    .subscribe(status => { if(status === 'SUBSCRIBED') scheduleSyncCheck(1500); });
 }
 
 /* ---- App startup — no login: whoever opens the page is identified only by the
@@ -1531,7 +1858,14 @@ async function initApp(){
   setSaveStatus('Loading products…');
   let ok = false;
   try{ ok = await fetchAllData(); }catch(err){ console.error('Initial load error', err); }
-  if(!ok){ loadState(); } // offline fallback: last snapshot saved to this browser
+  if(!ok){
+    loadState();                       // offline fallback: last snapshot saved to this browser (view only)
+    rows.forEach(r => { r._onServer = true; r._saved = r.values.map(sv); });
+    retryInitialLoad();
+  } else {
+    const n = replayOutbox();
+    if(n) setTimeout(()=>showToast(`Recovered ${n} unsaved change${n===1?'':'s'} from last time — saving now`), 400);
+  }
   initialLoadDone = ok;
   renderBody();
   updateUndoRedoButtons();
@@ -1539,6 +1873,19 @@ async function initApp(){
   if(ok) startRealtime();
 }
 initApp();
+/* If the page opened without internet, keep trying; once connected, load the real data. */
+function retryInitialLoad(){
+  setTimeout(async () => {
+    let ok = false;
+    try{ ok = await fetchAllData(); }catch(e){}
+    if(!ok){ retryInitialLoad(); return; }
+    replayOutbox();
+    initialLoadDone = true;
+    renderBody();
+    setSaveStatus('Synced ✓ · live');
+    startRealtime();
+  }, 8000);
+}
 
 const UPLOAD_ICON = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#787A70" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
 
@@ -1917,7 +2264,7 @@ function addCategoryIfNew(val){
   if(!dynamicCategories.some(c=>c.toLowerCase()===v.toLowerCase())){ dynamicCategories.push(v); scheduleConfigSave(); }
 }
 function cloneRows(){
-  return rows.map(r => ({ id:r.id, _onServer:!!r._onServer, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:r.values.slice(), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy }));
+  return rows.map((r, i) => snapRow(r, i));
 }
 
 function addRow(){ mutateWithHistory('Added a new product row', ()=>{ rows.push(newRow()); }); }
@@ -2080,11 +2427,58 @@ function isAddedToday(row){
 /* ========================================================================
    HISTORY / UNDO-REDO
    ======================================================================== */
+/* ---- Undo / Redo ----
+   Each step remembers only what YOUR action changed (which fields of which products,
+   which products were added/removed, positions). Undo puts back just those things,
+   so edits made meanwhile by other people — or in other fields — are never undone. */
+function snapRow(r, i){ return { id:r.id, i, values:r.values.slice(), sortOrder:(r.sortOrder===undefined?null:r.sortOrder), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy, history:r.history||[] }; }
+function makeUndoStep(beforeList, afterList, onlyId){
+  const bm = new Map(beforeList.map(r => [r.id, r])), am = new Map(afterList.map(r => [r.id, r]));
+  const before = new Map(), after = new Map();
+  new Set([...bm.keys(), ...am.keys()]).forEach(id => {
+    if(onlyId !== undefined && id !== onlyId) return;
+    const b = bm.get(id), a = am.get(id);
+    if(b && a && JSON.stringify(b.values) === JSON.stringify(a.values) && (b.sortOrder ?? null) === (a.sortOrder ?? null)) return;
+    if(b) before.set(id, b); if(a) after.set(id, a);
+  });
+  if(!before.size && !after.size) return null;
+  return { before, after };
+}
+function pushUndo(beforeList, onlyId){
+  const step = makeUndoStep(beforeList, cloneRows(), onlyId);
+  if(!step) return;
+  undoStack.push(step);
+  if(undoStack.length > 50) undoStack.shift();
+  redoStack = [];
+}
+function applyStep(step, dir){
+  const from = dir === 'undo' ? step.after : step.before;   // state right after (undo) / before (redo) the action
+  const to   = dir === 'undo' ? step.before : step.after;   // state we want back
+  const ids = new Set([...from.keys(), ...to.keys()]);
+  ids.forEach(id => {
+    const f = from.get(id), t = to.get(id);
+    const cur = rows.find(r => r.id === id);
+    if(t && !f){                                    // product was removed by the action → bring it back
+      if(cur) return;
+      const r = { id:t.id, values:t.values.slice(), sortOrder:t.sortOrder, createdAt:t.createdAt, createdBy:t.createdBy, lastEditedAt:Date.now(), lastEditedBy:currentUser||'Unassigned', history:t.history, _onServer:false, _saved:null, _mine:true };
+      deletedLocally.delete(id); pendingDeletes.delete(id);
+      rows.splice(Math.min(t.i, rows.length), 0, r);
+    } else if(f && !t){                             // product was added by the action → remove it
+      const i = rows.findIndex(r => r.id === id);
+      if(i > -1) rows.splice(i, 1);
+    } else if(f && t && cur){                       // put back only the fields the action changed
+      for(let i = 0; i < t.values.length; i++){
+        if(sv(f.values[i]) !== sv(t.values[i])) cur.values[i] = t.values[i];
+      }
+      if((f.sortOrder ?? null) !== (t.sortOrder ?? null)) cur.sortOrder = t.sortOrder;
+      stampEdit(cur);
+    }
+  });
+}
 function mutateWithHistory(label, fn){
   const snap = cloneRows();
   fn();
-  undoStack.push(snap);
-  if(undoStack.length>50) undoStack.shift();
+  { const step = makeUndoStep(snap, cloneRows()); if(step){ undoStack.push(step); if(undoStack.length>50) undoStack.shift(); } }
   redoStack = [];
   logActivity(label);
   syncRowsDiff(snap, rows);
@@ -2094,11 +2488,13 @@ function mutateWithHistory(label, fn){
 }
 function undo(){
   if(!undoStack.length) return;
+  flushAllLiveSaves();
   const before = cloneRows();
-  const prev = undoStack.pop();
-  redoStack.push(before);
+  const step = undoStack.pop();
+  redoStack.push(step);
   const sigBefore = orderSignature(rows);
-  rows = prev;
+  applyStep(step, 'undo');
+  sortEmptyRowsLast(); renumberOrder();
   logActivity('Undo');
   syncRowsDiff(before, rows);
   renderBody();
@@ -2108,11 +2504,13 @@ function undo(){
 }
 function redo(){
   if(!redoStack.length) return;
+  flushAllLiveSaves();
   const before = cloneRows();
-  const next = redoStack.pop();
-  undoStack.push(before);
+  const step = redoStack.pop();
+  undoStack.push(step);
   const sigBefore = orderSignature(rows);
-  rows = next;
+  applyStep(step, 'redo');
+  sortEmptyRowsLast(); renumberOrder();
   logActivity('Redo');
   syncRowsDiff(before, rows);
   renderBody();
@@ -2596,7 +2994,7 @@ function insertRowAt(index){
     const el = onPhone ? card : tr;
     if(!el) return;
     el.classList.add('just-moved'); setTimeout(()=>el.classList.remove('just-moved'), 1600);
-    if(onPhone) el.scrollIntoView({ block:'center', behavior:'smooth' });
+    if(onPhone){ markIntendedScroll(); el.scrollIntoView({ block:'center', behavior:'smooth' }); }
     if(!onPhone){ const first = tr.querySelector('textarea.cell, input.cell'); if(first) setTimeout(()=>first.focus({preventScroll:true}), 350); }
     showToast(`New product inserted at #${i+1} — the ones below moved down by one`);
   });
@@ -2616,7 +3014,7 @@ function insertRowAbove(idx){ insertRowAt(idx); }
 /* Sort rows by their saved position (stable; products without one keep their place after the rest) */
 function sortRowsByPosition(){
   const indexed = rows.map((r,i)=>({ r, i, p: (typeof r.sortOrder === 'number' && isFinite(r.sortOrder)) ? r.sortOrder : Infinity }));
-  indexed.sort((a,b)=> (a.p - b.p) || (a.p === Infinity ? a.i - b.i : ((a.r.createdAt||0) - (b.r.createdAt||0)) || (String(a.r.id) < String(b.r.id) ? -1 : 1)));
+  indexed.sort((a,b)=> (a.p - b.p) || (a.p === Infinity ? a.i - b.i : (String(a.r.id) < String(b.r.id) ? -1 : 1)));
   rows = indexed.map(x=>x.r);
 }
 /* Save positions to the database: one request for any number of products. */
@@ -2678,6 +3076,74 @@ function ensureOrderNumbers(){
 let ensureTimer = null;
 function scheduleEnsureOrder(){ clearTimeout(ensureTimer); ensureTimer = setTimeout(ensureOrderNumbers, 600); }
 /* After saving, read the positions back from the server and adopt them, so every device ends up identical. */
+/* =====================================================================
+   SELF-CHECK — every device regularly compares itself with the server and
+   fixes any difference (live updates can be lost when a laptop sleeps, the
+   Wi-Fi changes or the phone switches apps). Cheap: it first downloads only
+   each product's id + last-change time, then fetches just what differs.
+   ===================================================================== */
+let syncTimer = null, syncRunning = false, lastSyncAt = 0;
+function scheduleSyncCheck(delay){ clearTimeout(syncTimer); syncTimer = setTimeout(syncCheck, delay ?? 3000); }
+async function syncCheck(){
+  if(!initialLoadDone || SUPABASE_NOT_CONFIGURED) return;
+  if(syncRunning || saveRunning || saveQueue.size || pendingDeletes.size || orderFlushing || rows.some(r => r._orderUnsaved)){ scheduleSyncCheck(2500); return; }
+  syncRunning = true;
+  try{
+    const cols = HAS_SORT_COLUMN ? 'id,updated_at,sort_order' : 'id,updated_at';
+    const { data, error } = await sb.from('products').select(cols);
+    if(error || !Array.isArray(data)) return;
+    if(saveRunning || saveQueue.size || pendingDeletes.size){ scheduleSyncCheck(2000); return; }   // we changed something meanwhile
+    lastSyncAt = Date.now();
+    const srv = new Map(data.map(d => [String(d.id), d]));
+    const local = new Map(rows.map(r => [String(r.id), r]));
+    let changed = false;
+    // gone from the server (deleted on another device) → remove here, unless this device still has unsaved work in it
+    for(let i = rows.length - 1; i >= 0; i--){
+      const r = rows[i];
+      if(r._onServer && !srv.has(String(r.id)) && !rowNeedsSave(r) && !liveSaveRows[r.id]){ rows.splice(i, 1); changed = true; }
+    }
+    // new on the server, or changed since this device last saw it → fetch just those products
+    const need = [];
+    srv.forEach((d, id) => {
+      const r = local.get(id);
+      if(!r){ if(!pendingDeletes.has(d.id)) need.push(d.id); return; }
+      if(tsMicros(d.updated_at) > (r._srvTs || 0)) need.push(d.id);
+      else if(HAS_SORT_COLUMN && !orderIsLocked(r)){
+        const so = d.sort_order === null || d.sort_order === undefined ? null : Number(d.sort_order);
+        if(so !== (r.sortOrder ?? null)){ r.sortOrder = so; changed = true; }
+      }
+    });
+    for(let i = 0; i < need.length; i += 150){
+      const { data: full, error: e2 } = await sb.from('products').select('*').in('id', need.slice(i, i + 150));
+      if(e2 || !Array.isArray(full)) break;
+      full.forEach(row => {
+        const before = rows.length;
+        applyRemoteRowChange({ eventType: local.has(String(row.id)) ? 'UPDATE' : 'INSERT', new: row }, true);
+        if(rows.length !== before) changed = true;
+      });
+      changed = true;
+    }
+    if(normalizeOrder()) changed = true;
+    if(changed) scheduleRender();
+  } finally { syncRunning = false; }
+}
+/* Two people reordering at the very same moment can leave two products with the same
+   number. Every device fixes this the same way (by number, then by id), so they agree. */
+function normalizeOrder(){
+  if(!HAS_SORT_COLUMN || !initialLoadDone) return false;
+  const placed = rows.filter(r => typeof r.sortOrder === 'number' && isFinite(r.sortOrder));
+  const seen = new Set(); let bad = false;
+  placed.forEach(r => { if(seen.has(r.sortOrder)) bad = true; seen.add(r.sortOrder); });
+  if(!bad) return false;
+  placed.sort((a, b) => (a.sortOrder - b.sortOrder) || (String(a.id) < String(b.id) ? -1 : 1));
+  placed.forEach((r, i) => { if(r.sortOrder !== i + 1){ r.sortOrder = i + 1; markOrderUnsaved(r); } });
+  return true;
+}
+setInterval(() => { if(document.visibilityState === 'visible') syncCheck(); }, 45000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') scheduleSyncCheck(500); });
+window.addEventListener('online', () => scheduleSyncCheck(1000));
+window.addEventListener('focus', () => { if(Date.now() - lastSyncAt > 15000) scheduleSyncCheck(300); });
+
 async function reconcileOrder(){
   if(!HAS_SORT_COLUMN || SUPABASE_NOT_CONFIGURED) return;
   if(orderFlushing || rows.some(r => r._orderUnsaved) || Date.now() < orderLockUntil){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 2000); return; }
@@ -2689,6 +3155,7 @@ async function reconcileOrder(){
   const byId = new Map(data.map(d => [String(d.id), d.sort_order === null || d.sort_order === undefined ? null : Number(d.sort_order)]));
   let changed = false;
   rows.forEach(r => { const v = byId.get(String(r.id)); if(v !== undefined && v !== (r.sortOrder ?? null)){ r.sortOrder = v; changed = true; } });
+  if(normalizeOrder()) changed = true;
   if(changed) renderBody(); else scheduleEnsureOrder();
 }
 async function persistOrder(list, values){
@@ -2722,8 +3189,8 @@ function showOrderSetupNotice(show){
   el = document.createElement('div');
   el.id = 'orderSetupNotice';
   el.className = 'order-notice';
-  el.innerHTML = `<b>One-time database update needed to save product order on all devices.</b>
-    In Supabase → SQL Editor, run the file <code>supabase-add-ordering.sql</code> (included in the zip), then reload this page.
+  el.innerHTML = `<b>One-time database update needed</b> so product order and every edit are saved safely on all devices.
+    In Supabase → SQL Editor → New query, paste the file <code>supabase-update.sql</code> (included in the zip), click Run, then reload this page.
     <button type="button" onclick="this.parentNode.remove()">Dismiss</button>`;
   const anchor = document.querySelector('.queue-bar') || document.body.firstChild;
   anchor.parentNode.insertBefore(el, anchor);
@@ -2731,8 +3198,32 @@ function showOrderSetupNotice(show){
 function orderSignature(list){ return list.filter(isPlaced).map(r=>String(r.id)).join(','); }
 
 /* Move a product. insertBefore = position (0..rows.length) it should land in front of. */
-function moveRow(from, insertBefore){
+/* Remember where a product is on screen, then (after it moves) scroll so it's in the same spot. */
+function rowScreenEl(id){
+  const i = rows.findIndex(r => r.id === id);
+  if(i < 0) return null;
+  if(isPhoneView()) return document.querySelector(`.mcard[data-row-index="${i}"]`);
+  return vTrs.get(i) || null;
+}
+function captureAnchor(id, screenTop){
+  const el = rowScreenEl(id);
+  return { id, top: screenTop != null ? screenTop : (el ? el.getBoundingClientRect().top : null) };
+}
+function restoreAnchor(a){
+  if(!a || a.top == null) return;
+  if(!isPhoneView()) ensureRowRendered(rows.findIndex(r => r.id === a.id));
+  const el = rowScreenEl(a.id);
+  if(!el) return;
+  const delta = el.getBoundingClientRect().top - a.top;
+  if(Math.abs(delta) < 1) return;
+  markIntendedScroll();
+  if(isPhoneView()) window.scrollBy(0, delta);
+  else { const sc = tableScrollEl(); sc.scrollTop += delta; vUpdate(); }
+  el.classList.add('just-moved'); setTimeout(() => el.classList.remove('just-moved'), 1200);
+}
+function moveRow(from, insertBefore, anchorTop){
   if(from < 0 || from >= rows.length) return;
+  const anchor = captureAnchor(rows[from].id, anchorTop);
   insertBefore = Math.max(0, Math.min(rows.length, insertBefore));
   if(insertBefore === from || insertBefore === from + 1) return;
   const name = (rows[from].values[IDX["Product Name EN"]] || '').trim() || `product #${from+1}`;
@@ -2743,6 +3234,7 @@ function moveRow(from, insertBefore){
     renumberOrder();
   });
   commitOrder();
+  restoreAnchor(anchor);
 }
 /* =====================================================================
    LEARNED OPTIONS — anything typed into a dropdown field (Color, Brand,
@@ -2889,7 +3381,7 @@ function setPosition(rIdx, raw, el){
     const tr = ensureRowRendered(to, true);
     const card = document.querySelector(`.mcard[data-row-index="${to}"]`);
     [tr, card].forEach(x=>{ if(!x) return; x.classList.add('just-moved'); setTimeout(()=>x.classList.remove('just-moved'), 1600); });
-    if(card && getComputedStyle(card.parentNode).display !== 'none') card.scrollIntoView({block:'center', behavior:'smooth'});
+    if(card && getComputedStyle(card.parentNode).display !== 'none'){ markIntendedScroll(); card.scrollIntoView({block:'center', behavior:'smooth'}); }
     // (desktop: ensureRowRendered already scrolled the table to it)
   });
 }
@@ -2937,6 +3429,7 @@ function setupRowDrag(){
   const tbody = document.getElementById('tbody');
   if(!tbody || tbody._dragReady) return;
   tbody._dragReady = true;
+  tbody.addEventListener('pointerdown', e=>{ if(e.target.closest('tr.v-lite')){ clearTimeout(vLiteTimer); vRenderAll(); } }, true);
   tbody.addEventListener('mousedown', e=>{
     const h = e.target.closest('.drag-handle'); if(!h) return;
     const tr = h.closest('tr'); if(tr) tr.draggable = true;
@@ -2966,7 +3459,11 @@ function setupRowDrag(){
     const below = tr.classList.contains('drop-below');
     const from = dragFromIdx;
     dragFromIdx = null; clearDropMarks();
-    moveRow(from, below ? idx + 1 : idx);
+    const rr = tr.getBoundingClientRect();
+    const fromTr = vTrs.get(from), h = fromTr ? fromTr.getBoundingClientRect().height : rr.height;
+    // dropped above a row → it takes that row's place; dropped below → it sits just under it
+    const dropTop = below ? (from < idx ? rr.bottom - h : rr.bottom) : (from < idx ? rr.top - h : rr.top);
+    moveRow(from, below ? idx + 1 : idx, dropTop);
   });
   tbody.addEventListener('dragend', e=>{
     dragFromIdx = null; clearDropMarks();
@@ -2992,7 +3489,7 @@ let vRowH = 60;                     // measured row height
 let vTrs = new Map();               // rIdx -> <tr> currently on the page
 let vDupe = null;                   // duplicate info for this render
 let vGen = 0;                       // bumps on every full render
-let vBusy = false, vAgain = false;
+let vBusy = false, vAgain = false, vFillTimer = null, vLiteTimer = null;
 const tableScrollEl = () => document.getElementById('tableScroll');
 
 function vSpacer(cls){
@@ -3000,13 +3497,14 @@ function vSpacer(cls){
   const td = document.createElement('td'); td.colSpan = flatFields.length + 1; tr.appendChild(td);
   return tr;
 }
-function vRange(){
+function vRange(buffer){
+  const BUF = buffer ?? V_BUFFER;
   const sc = tableScrollEl(), tbody = document.getElementById('tbody');
   const scRect = sc.getBoundingClientRect(), bRect = tbody.getBoundingClientRect();
   const topInBody = Math.max(0, scRect.top - bRect.top);            // how far down the body we are
   const visH = Math.max(sc.clientHeight, 300);
-  let s = Math.floor(topInBody / vRowH) - V_BUFFER;
-  let e = Math.ceil((topInBody + visH) / vRowH) + V_BUFFER;
+  let s = Math.floor(topInBody / vRowH) - BUF;
+  let e = Math.ceil((topInBody + visH) / vRowH) + BUF;
   s = Math.max(0, Math.min(s, vView.length));
   e = Math.max(s, Math.min(e, vView.length));
   return [s, e];
@@ -3033,21 +3531,26 @@ function vRenderAll(){
   const active = document.activeElement;
   const keepFocus = active && tbody.contains(active) ? { rIdx: parseInt(active.closest('tr')?.dataset.rowIndex, 10), col: active.closest('td') ? Array.prototype.indexOf.call(active.closest('tr').children, active.closest('td')) : -1, sel: [active.selectionStart, active.selectionEnd] } : null;
   vDupe = getDupeSets();
+  const sc = tableScrollEl();
+  const savedTop = sc ? sc.scrollTop : 0, savedLeft = sc ? sc.scrollLeft : 0;
+  [vStart, vEnd] = vRange();            // measured while the old rows are still there
   vTrs = new Map();
-  tbody.textContent = '';
   const frag = document.createDocumentFragment();
   frag.appendChild(vSpacer('v-top'));
-  [vStart, vEnd] = vRange();
   for(let p = vStart; p < vEnd; p++){
     const rIdx = vView[p];
     const tr = buildRowTr(rows[rIdx], rIdx, vDupe);
     vTrs.set(rIdx, tr); frag.appendChild(tr);
   }
   frag.appendChild(vSpacer('v-bot'));
-  tbody.appendChild(frag);
+  const topSp = frag.firstChild.firstChild, botSp = frag.lastChild.firstChild;
+  topSp.style.height = (vStart * vRowH) + 'px'; botSp.style.height = (Math.max(0, vView.length - vEnd) * vRowH) + 'px';
+  tbody.replaceChildren(frag);          // old rows out, new rows in — in one step, no jump
   vSetSpacers();
+  if(sc && (sc.scrollTop !== savedTop || sc.scrollLeft !== savedLeft)){ sc.scrollTop = savedTop; sc.scrollLeft = savedLeft; }
   sizeTextareas(tbody.querySelectorAll('textarea.cell'));
   if(!colsLocked && vTrs.size) lockColumns();
+  fitStickyHeader();
   vMeasure();
   if(keepFocus && vTrs.has(keepFocus.rIdx) && keepFocus.col > -1){
     const el = vTrs.get(keepFocus.rIdx).children[keepFocus.col]?.querySelector('.cell');
@@ -3065,6 +3568,20 @@ function vUpdate(){
     const top = tbody.querySelector('.v-top'), bot = tbody.querySelector('.v-bot');
     if(!top || !bot){ vRenderAll(); return; }
     let [s, e] = vRange();
+    const fresh = (e - s) - Math.max(0, Math.min(e, vEnd) - Math.max(s, vStart));   // rows that would need building
+    if(fresh > 6 && !(document.activeElement && tbody.contains(document.activeElement))){
+      // Big jump (fast flick): show light read-only rows instantly, then swap in the full
+      // editable rows as soon as scrolling stops.
+      [s, e] = vRange(1);
+      vTrs.forEach(tr => tr.remove()); vTrs = new Map();
+      const frag = document.createDocumentFragment();
+      for(let p = s; p < e; p++){ const r = vView[p]; const tr = buildLiteTr(rows[r], r); vTrs.set(r, tr); frag.appendChild(tr); }
+      top.after(frag);
+      vStart = s; vEnd = e; vSetSpacers();
+      clearTimeout(vLiteTimer); vLiteTimer = setTimeout(vUpgradeLite, 140);
+      return;
+    }
+    if(vHasLite()){ clearTimeout(vLiteTimer); vLiteTimer = setTimeout(vUpgradeLite, 140); }
     // never drop the row being edited
     const act = document.activeElement;
     const actTr = act && tbody.contains(act) ? act.closest('tr') : null;
@@ -3098,6 +3615,41 @@ function vUpdate(){
     if(vAgain){ vAgain = false; requestAnimationFrame(vUpdate); }
   }
 }
+function vHasLite(){ for(const tr of vTrs.values()) if(tr.classList.contains('v-lite')) return true; return false; }
+/* After a flick stops, swap the light rows for full editable ones a few per frame (visible ones first). */
+function vUpgradeLite(){
+  const gen = vGen;
+  const sc = tableScrollEl(), sTop = sc.getBoundingClientRect().top;
+  const lite = [...vTrs.entries()].filter(([, tr]) => tr.classList.contains('v-lite'))
+    .sort((a, b) => Math.abs(a[1].getBoundingClientRect().top - sTop) - Math.abs(b[1].getBoundingClientRect().top - sTop));
+  const step = () => {
+    if(gen !== vGen) return;                          // a full redraw happened meanwhile
+    const t0 = performance.now();
+    while(lite.length && performance.now() - t0 < 10){
+      const [rIdx, old] = lite.shift();
+      if(vTrs.get(rIdx) !== old || !old.isConnected) continue;
+      const tr = buildRowTr(rows[rIdx], rIdx, vDupe || getDupeSets());
+      old.replaceWith(tr); vTrs.set(rIdx, tr);
+      sizeTextareas(tr.querySelectorAll('textarea.cell'));
+    }
+    if(lite.length) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+/* A light, read-only stand-in row (same height) used only while flicking fast. */
+function buildLiteTr(row, rIdx){
+  const tr = document.createElement('tr');
+  tr.className = 'v-lite'; tr.dataset.rowIndex = rIdx;
+  tr.style.height = vRowH + 'px';
+  let html = `<td class="rowno"><span class="rowtop"><span class="pos-num">${rIdx+1}</span></span></td>`;
+  flatFields.forEach((f, i) => {
+    const v = row.values[i];
+    if(f.type === 'image') html += `<td class="td-img"><div class="lite-img">${v ? `<img src="${escHtml(v)}" alt="" loading="lazy" decoding="async">` : ''}</div></td>`;
+    else html += `<td><div class="lite-cell${f.rtl ? ' rtl-field' : ''}" style="width:${FIELD_WIDTHS[f.name] || 150}px">${escHtml(v)}</div></td>`;
+  });
+  tr.innerHTML = html;
+  return tr;
+}
 let vRaf = 0;
 function vOnScroll(){ if(vRaf) return; vRaf = requestAnimationFrame(()=>{ vRaf = 0; vUpdate(); }); }
 document.addEventListener('DOMContentLoaded', ()=>{});
@@ -3110,6 +3662,7 @@ document.addEventListener('DOMContentLoaded', ()=>{});
 /* Make sure a row is on the page (scrolling the table to it if needed); returns its <tr>. */
 function ensureRowRendered(rIdx, center){
   if(isPhoneView()) return null;
+  if(vHasLite()){ clearTimeout(vLiteTimer); vRenderAll(); }
   let tr = vTrs.get(rIdx);
   const pos = vView.indexOf(rIdx);
   if(pos === -1) return tr || null;
@@ -3119,8 +3672,10 @@ function ensureRowRendered(rIdx, center){
   const theadH = (document.querySelector('#tableScroll thead') || {}).offsetHeight || 0;
   const viewTop = sc.scrollTop + theadH, viewBot = sc.scrollTop + sc.clientHeight;
   if(!tr || rowTop < viewTop || rowTop + vRowH > viewBot){
+    markIntendedScroll();
     sc.scrollTop = center ? Math.max(0, rowTop - sc.clientHeight / 2 + vRowH / 2) : (rowTop < viewTop ? rowTop - theadH : rowTop + vRowH - sc.clientHeight);
     vUpdate();
+    if(vHasLite()){ clearTimeout(vLiteTimer); vRenderAll(); }   // the caller needs real, editable rows
     tr = vTrs.get(rIdx);
   }
   return tr || null;
@@ -3142,6 +3697,15 @@ function lockColumns(){
   table.classList.add('cols-locked');
   colsLocked = true;
 }
+/* The second header row sticks exactly under the first (no gap where rows could peek through). */
+let stickyGroupH = 0;
+function fitStickyHeader(){
+  const g = document.querySelector('#thead tr.group th');
+  if(!g) return;
+  const h = Math.round(g.getBoundingClientRect().height);
+  if(h && h !== stickyGroupH){ stickyGroupH = h; document.documentElement.style.setProperty('--group-h', h + 'px'); }
+}
+window.addEventListener('resize', () => requestAnimationFrame(fitStickyHeader));
 function unlockColumns(){
   const table = document.querySelector('#tableScroll table');
   if(!table) return;
@@ -3313,12 +3877,7 @@ function buildRowTr(row, rIdx, dupeInfo){
         row.values[cIdx] = e.target.value;
         stampEdit(row);
         persistRow(row);
-        if(preEditSnapshot){
-          undoStack.push(preEditSnapshot);
-          if(undoStack.length>50) undoStack.shift();
-          redoStack = [];
-          preEditSnapshot = null;
-        }
+        if(preEditSnapshot){ pushUndo(preEditSnapshot, row.id); preEditSnapshot = null; }
         logActivity(`Row ${rIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
         updateUndoRedoButtons();
         scheduleAutosave();
@@ -3414,14 +3973,69 @@ function buildRowTr(row, rIdx, dupeInfo){
     });
     return tr;
 }
+/* ---- Phone cards ---- */
+const cardCache = new Map();          // row id -> { el, sig }
+function escHtml(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ri(id){ return rows.findIndex(r => r.id === id); }   // current position of a product (cards are reused, so look it up on click)
+function buildCard(row, status, pct, rowStarted, sel, placed){
+  const name = (row.values[IDX["Product Name EN"]] || "").trim();
+  const sku = (row.values[IDX["SKU"]] || "").trim();
+  const category = row.values[IDX["Main Category"]];
+  const price = (row.values[IDX["Regular Price"]] || "").trim();
+  const imgUrl = row.values[IDX["Product Image"]];
+  const subLine = [sku ? `SKU ${sku}` : "No SKU yet", category].filter(Boolean).join(" · ");
+  const id = row.id;
+  const card = document.createElement('div');
+  card.className = 'mcard' + (sel ? ' selected' : '');
+  card.onclick = () => openFocusedMode(ri(id));
+  card.innerHTML = `
+      <div class="mcard-select" onclick="event.stopPropagation()">
+        <input type="checkbox" class="row-select" ${sel?'checked':''} onchange="toggleRowSelect(${id}, this.checked)">
+        ${placed ? `<input class="pos-input mpos" type="text" inputmode="numeric" value="" aria-label="Position"
+          title="Position — type a new number and press Enter to move this product"
+          onfocus="this.select()" onkeydown="posKey(event, this, ri(${id}))" onchange="setPosition(ri(${id}), this.value, this)">` : ``}
+      </div>
+      <div class="mcard-thumb">${imgUrl ? `<img src="${escHtml(imgUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="mcard-noimg">No photo</span>`}</div>
+      <div class="mcard-body">
+        <div class="mcard-title${name?'':' untitled'}">${name ? escHtml(name) : (rowStarted ? 'Untitled product' : 'Empty row')}</div>
+        <div class="mcard-sub">${rowStarted ? escHtml(subLine) : 'Tap to start entering a product'}</div>
+        <div class="mcard-meta">
+          ${rowStarted ? `<span class="mcard-status ${statusClass(status)}">${status}</span>` : ``}
+          ${price ? `<span class="mcard-price">$${escHtml(price)}</span>` : ``}
+        </div>
+        <div class="mcard-progress-row">
+          <div class="mcard-bar"><div class="mcard-bar-fill" style="width:${pct}%"></div></div>
+          <span class="mcard-pct">${pct}%</span>
+        </div>
+      </div>
+      <div class="mcard-actions" onclick="event.stopPropagation()">
+        ${placed ? `<div class="mcard-move mcard-move-ud">
+          <button class="icon" title="Move up" onclick="moveRowUp(ri(${id}))">↑</button>
+          <button class="icon" title="Move down" onclick="moveRowDown(ri(${id}))">↓</button>
+          <button class="icon insrow" title="Insert a new product below" onclick="insertRowBelow(ri(${id}))">${INSERT_ICON}</button>
+        </div>` : ``}
+        <div class="mcard-move">
+          <button class="icon dup" title="Duplicate product" onclick="duplicateRow(ri(${id}))">⧉</button>
+          <button class="icon del" title="Delete row" onclick="deleteRow(ri(${id}))">✕</button>
+        </div>
+        ${(rowStarted || copiedRowValues) ? `<div class="mcard-move">
+          ${rowStarted ? `<button class="icon copyrow" title="Copy data (without photo)" onclick="copyRowData(ri(${id}))">${COPY_ICON}</button>` : ``}
+          ${copiedRowValues ? `<button class="icon pasterow" title="Paste copied data here" onclick="pasteRowData(ri(${id}))">${PASTE_ICON}</button>` : ``}
+        </div>` : ``}
+      </div>`;
+  return card;
+}
 function renderBody(){
   setupRowDrag();
   closeComboMenu();
   sortEmptyRowsLast();
+  const savedWinY = window.scrollY;
   const tbody = document.getElementById('tbody');
-  tbody.innerHTML = "";
   const mobileCards = document.getElementById('mobileCards');
-  mobileCards.innerHTML = "";
+  // keep the page's height while the list is rebuilt, so the browser never jumps to the top
+  const keepH = mobileCards.offsetHeight;
+  if(keepH) mobileCards.style.minHeight = keepH + 'px';
+  const cfrag = document.createDocumentFragment(), liveIds = new Set();
   const dupeInfo = getDupeSets();
   const phone = isPhoneView();
   const tfrag = document.createDocumentFragment();
@@ -3434,56 +4048,23 @@ function renderBody(){
     const pct = rowCompletionPct(row);
     const rowStarted = rowHasAnyValue(row); // false only for a completely untouched row — suppresses red highlighting
 
-   if(phone){   // ---- phone card (desktop rows are built on demand by buildRowTr)
-    // ---- Mobile card (built from the same per-row values computed above, so it
-    //      always stays perfectly in sync with the desktop grid, no extra work) ----
-    const name = (row.values[IDX["Product Name EN"]] || "").trim();
-    const sku = (row.values[IDX["SKU"]] || "").trim();
-    const category = row.values[IDX["Main Category"]];
-    const price = (row.values[IDX["Regular Price"]] || "").trim();
-    const imgUrl = row.values[IDX["Product Image"]];
-    const subLine = [sku ? `SKU ${sku}` : "No SKU yet", category].filter(Boolean).join(" · ");
-
-    const card = document.createElement('div');
-    card.className = 'mcard' + (selectedRowIds.has(row.id) ? ' selected' : '');
+   {   // ---- phone card: reused when nothing on it changed, so moving/deleting is instant
+    const sel = selectedRowIds.has(row.id), placed = isPlaced(row);
+    const sig = [row.values[IDX["Product Name EN"]], row.values[IDX["SKU"]], row.values[IDX["Main Category"]], row.values[IDX["Regular Price"]], row.values[IDX["Product Image"]], status, pct, sel, placed, rowStarted, !!copiedRowValues].join('\u0001');
+    let c = cardCache.get(row.id);
+    if(!c || c.sig !== sig){ c = { el: buildCard(row, status, pct, rowStarted, sel, placed), sig }; cardCache.set(row.id, c); }
+    const card = c.el;
     card.dataset.rowIndex = rIdx;
-    card.onclick = () => openFocusedMode(rIdx);
-    card.innerHTML = `
-      <div class="mcard-select" onclick="event.stopPropagation()">
-        <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
-        ${isPlaced(row) ? posInputHTML(rIdx, 'mpos') : ``}
-      </div>
-      <div class="mcard-thumb">${imgUrl ? `<img src="${imgUrl}" alt="" loading="lazy" decoding="async">` : `<span class="mcard-noimg">No photo</span>`}</div>
-      <div class="mcard-body">
-        <div class="mcard-title${name?'':' untitled'}">${name || (rowStarted ? 'Untitled product' : 'Empty row')}</div>
-        <div class="mcard-sub">${rowStarted ? subLine : 'Tap to start entering a product'}</div>
-        <div class="mcard-meta">
-          ${rowStarted ? `<span class="mcard-status ${statusClass(status)}">${status}</span>` : ``}
-          ${price ? `<span class="mcard-price">$${price}</span>` : ``}
-        </div>
-        <div class="mcard-progress-row">
-          <div class="mcard-bar"><div class="mcard-bar-fill" style="width:${pct}%"></div></div>
-          <span class="mcard-pct">${pct}%</span>
-        </div>
-      </div>
-      <div class="mcard-actions" onclick="event.stopPropagation()">
-        ${isPlaced(row) ? `<div class="mcard-move mcard-move-ud">
-          <button class="icon" title="Move up" onclick="moveRowUp(${rIdx})" ${rIdx===0?'disabled':''}>↑</button>
-          <button class="icon" title="Move down" onclick="moveRowDown(${rIdx})" ${(rIdx+1>=rows.length || !isPlaced(rows[rIdx+1]))?'disabled':''}>↓</button>
-          <button class="icon insrow" title="Insert a new product below" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>
-        </div>` : ``}
-        <div class="mcard-move">
-          <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
-          <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
-        </div>
-        ${(rowStarted || copiedRowValues) ? `<div class="mcard-move">
-          ${rowStarted ? `<button class="icon copyrow" title="Copy data (without photo)" onclick="copyRowData(${rIdx})">${COPY_ICON}</button>` : ``}
-          ${copiedRowValues ? `<button class="icon pasterow" title="Paste copied data here" onclick="pasteRowData(${rIdx})">${PASTE_ICON}</button>` : ``}
-        </div>` : ``}
-      </div>`;
-    mobileCards.appendChild(card);
+    const pi = card.querySelector('.pos-input');
+    if(pi && document.activeElement !== pi) pi.value = rIdx + 1;
+    const up = card.querySelector('button[title="Move up"]'), dn = card.querySelector('button[title="Move down"]');
+    if(up) up.disabled = rIdx === 0;
+    if(dn) dn.disabled = !(rIdx + 1 < rows.length && isPlaced(rows[rIdx + 1]));
+    cfrag.appendChild(card);
+    liveIds.add(row.id);
    }
   });
+  if(phone){ mobileCards.replaceChildren(cfrag); cardCache.forEach((v, id) => { if(!liveIds.has(id)) cardCache.delete(id); }); }
   scheduleEnsureOrder();
   if(!rows.length){
     mobileCards.innerHTML = `<div class="mcard-empty">No products yet — tap the + button to add one.</div>`;
@@ -3492,6 +4073,26 @@ function renderBody(){
   updateStats();
   applyFilters(true);           // works out which rows match the search / filters, then builds the visible ones
   syncMirrorWidth();
+  mobileCards.style.minHeight = '';
+  if(Math.abs(window.scrollY - savedWinY) > 1) window.scrollTo(0, savedWinY);
+  guardScroll(savedWinY);
+}
+/* Safety net: a redraw must never move the page. If the page or the table moved by itself
+   (not because the tool deliberately showed a product), put it back on the next frame. */
+let intendedScrollAt = 0;
+function markIntendedScroll(){ intendedScrollAt = Date.now(); }
+// the person scrolling themselves is never undone
+['wheel','touchmove'].forEach(ev => window.addEventListener(ev, markIntendedScroll, { passive:true, capture:true }));
+window.addEventListener('keydown', e => { if(['PageDown','PageUp','Home','End',' ','ArrowDown','ArrowUp'].includes(e.key)) markIntendedScroll(); }, true);
+document.addEventListener('pointerdown', e => { if(e.target.closest('#tableScroll, #scrollMirror, .jump-btn') && !e.target.closest('button:not(.jump-btn), input, select, textarea, .combo-arrow')) markIntendedScroll(); }, true);
+function guardScroll(winY){
+  const sc = tableScrollEl();
+  const tTop = sc ? sc.scrollTop : 0, tLeft = sc ? sc.scrollLeft : 0, t0 = Date.now();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if(intendedScrollAt >= t0) return;
+    if(Math.abs(window.scrollY - winY) > 1) window.scrollTo(0, winY);
+    if(sc && (Math.abs(sc.scrollTop - tTop) > 1 || Math.abs(sc.scrollLeft - tLeft) > 1)){ sc.scrollTop = tTop; sc.scrollLeft = tLeft; vUpdate(); }
+  }));
 }
 
 function toggleRowSelect(id, checked){
@@ -4226,7 +4827,7 @@ function buildFocusedField(f, row, cIdx){
     row.values[cIdx] = e.target.value;
     stampEdit(row);
     persistRow(row);
-    if(preEditSnapshot){ undoStack.push(preEditSnapshot); if(undoStack.length>50) undoStack.shift(); redoStack=[]; preEditSnapshot=null; }
+    if(preEditSnapshot){ pushUndo(preEditSnapshot, row.id); preEditSnapshot=null; }
     logActivity(`Row ${focusedRowIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
     updateUndoRedoButtons();
     scheduleAutosave();

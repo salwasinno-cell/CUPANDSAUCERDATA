@@ -116,5 +116,12 @@ common tradeoff — just going in with eyes open about what it means.
 ## Update: saving the product order (one-time)
 Product order (drag ⠿ on desktop, ↑/↓ on phone, "Sort by…") is saved on each product so every
 device shows the same order. If you set up the database before this update, run
-`supabase-add-ordering.sql` once in Supabase → SQL Editor → New query → Run, then reload the page.
+`supabase-update.sql` once in Supabase → SQL Editor → New query → Run, then reload the page.
 New setups get this automatically from `supabase-setup.sql`.
+
+
+## Update: safer saving (one-time)
+Run `supabase-update.sql` once in Supabase → SQL Editor → New query → Run (safe to run again).
+It makes the order save on all devices and makes edits save field-by-field, so two people
+editing the same product never overwrite each other. Unsaved edits are retried automatically
+and kept in the browser until the server confirms them.
