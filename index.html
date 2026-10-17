@@ -769,7 +769,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.16.2</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.17.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1064,7 +1064,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.16.2';
+const APP_VERSION = '2026.10.17.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -1671,11 +1671,89 @@ async function persistActivity(text){
 async function uploadProductImage(file, rowId){
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
   const path = `${rowId}/${Date.now()}.${ext}`;
-  const { error } = await sb.storage.from(IMAGE_BUCKET).upload(path, file, { upsert:true, cacheControl:'3600' });
+  const thumbP = makeThumbBlob(file).catch(() => null);           // small copy made from the file itself (no download)
+  const { error } = await sb.storage.from(IMAGE_BUCKET).upload(path, file, { upsert:true, cacheControl:'31536000' });
   if(error){ alert('Image upload failed: ' + error.message); return null; }
   const { data } = sb.storage.from(IMAGE_BUCKET).getPublicUrl(path);
+  const tb = await thumbP;
+  if(tb){ try{ await uploadThumb(path, tb); }catch(e){} }
   return data.publicUrl;
 }
+
+/* ---- Fast photos: every photo also gets a small copy (≈20 KB instead of several MB) in thumbs/.
+   The table, phone cards and focused view show the small copy; the original is untouched.
+   Photos uploaded before this existed get their small copy made automatically the first time
+   any device shows them — after that every device loads the small one. ---- */
+const THUMB_PX = 360;
+const THUMB_PREFIX = 'thumbs/';
+const thumbMissing = new Set();     // originals whose small copy doesn't exist yet (this session)
+const thumbFailed  = new Set();     // couldn't make one (e.g. unsupported format) — don't retry this session
+const thumbQueue = []; let thumbBusy = 0;
+function imgPathFromUrl(url){
+  if(!url || typeof url !== 'string') return null;
+  const marker = `/object/public/${IMAGE_BUCKET}/`;
+  const i = url.indexOf(marker);
+  if(i === -1) return null;
+  const path = decodeURIComponent(url.slice(i + marker.length).split('?')[0]);
+  return path && !path.startsWith(THUMB_PREFIX) ? path : null;
+}
+function thumbPathFor(path){ return THUMB_PREFIX + path.replace(/\.[^./]+$/, '') + '.jpg'; }
+function smallImg(url){
+  // URL to show on screen: the small copy when it exists, otherwise the original
+  const path = imgPathFromUrl(url);
+  if(!path || thumbMissing.has(url) || thumbFailed.has(url)) return url;
+  return sb.storage.from(IMAGE_BUCKET).getPublicUrl(thumbPathFor(path)).data.publicUrl;
+}
+function imgTag(url, extra){
+  // <img> that shows the small copy and falls back to the original automatically
+  return `<img src="${escHtml(smallImg(url))}" data-orig="${escHtml(url)}" alt="" loading="lazy" decoding="async"${extra || ''}>`;
+}
+async function makeThumbBlob(blob){
+  const bmp = await withTimeout(createImageBitmap(blob), 15000, 'decode');
+  const scale = Math.min(1, THUMB_PX / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingQuality = 'high'; ctx.drawImage(bmp, 0, 0, w, h);
+  if(bmp.close) bmp.close();
+  return await withTimeout(new Promise((r, j) => c.toBlob(x => x ? r(x) : j(new Error('encode')), 'image/jpeg', 0.82)), 8000, 'encode');
+}
+async function uploadThumb(path, blob){
+  const { error } = await sb.storage.from(IMAGE_BUCKET).upload(thumbPathFor(path), blob, { upsert:false, cacheControl:'31536000', contentType:'image/jpeg' });
+  if(error && !/exist|duplicate|409/i.test((error.message || '') + (error.statusCode || ''))) throw error;
+}
+function queueThumb(url){
+  if(thumbFailed.has(url) || thumbQueue.includes(url)) return;
+  thumbQueue.push(url); pumpThumbs();
+}
+function pumpThumbs(){
+  while(thumbBusy < 2 && thumbQueue.length){
+    const url = thumbQueue.shift(); thumbBusy++;
+    (async () => {
+      const path = imgPathFromUrl(url);
+      const resp = await fetch(url, { mode:'cors' });
+      if(!resp.ok) throw new Error('HTTP ' + resp.status);
+      const tb = await makeThumbBlob(await resp.blob());
+      await uploadThumb(path, tb);
+      thumbMissing.delete(url);
+      // swap the on-screen originals for the new small copy
+      const small = smallImg(url);
+      document.querySelectorAll('img[data-orig]').forEach(im => { if(im.dataset.orig === url){ im.dataset.fb = ''; im.src = small; } });
+    })().catch(() => { thumbFailed.add(url); })
+      .finally(() => { thumbBusy--; setTimeout(pumpThumbs, 50); });
+  }
+}
+// small copy not there yet → show the original right away and make the small copy in the background
+document.addEventListener('error', ev => {
+  const im = ev.target;
+  if(!im || im.tagName !== 'IMG' || !im.dataset || !im.dataset.orig || im.dataset.fb) return;
+  const orig = im.dataset.orig;
+  if(im.src === orig) return;
+  im.dataset.fb = '1';
+  thumbMissing.add(orig);
+  im.src = orig;
+  if(imgPathFromUrl(orig)) queueThumb(orig);
+}, true);
 function deleteProductImageByUrl(url){
   // Fire-and-forget cleanup so replaced/removed/deleted photos don't pile up in Storage.
   if(!url) return;
@@ -1684,7 +1762,9 @@ function deleteProductImageByUrl(url){
   if(i === -1) return;
   const path = decodeURIComponent(url.slice(i + marker.length).split('?')[0]);
   if(!path) return;
-  sb.storage.from(IMAGE_BUCKET).remove([path]).then(({error})=>{
+  const paths = [path];
+  if(!path.startsWith(THUMB_PREFIX)) paths.push(thumbPathFor(path));   // remove its small copy too
+  sb.storage.from(IMAGE_BUCKET).remove(paths).then(({error})=>{
     if(error) console.error('Image cleanup failed for', path, error);
   });
 }
@@ -3644,7 +3724,7 @@ function buildLiteTr(row, rIdx){
   let html = `<td class="rowno"><span class="rowtop"><span class="pos-num">${rIdx+1}</span></span></td>`;
   flatFields.forEach((f, i) => {
     const v = row.values[i];
-    if(f.type === 'image') html += `<td class="td-img"><div class="lite-img">${v ? `<img src="${escHtml(v)}" alt="" loading="lazy" decoding="async">` : ''}</div></td>`;
+    if(f.type === 'image') html += `<td class="td-img"><div class="lite-img">${v ? imgTag(v) : ''}</div></td>`;
     else html += `<td><div class="lite-cell${f.rtl ? ' rtl-field' : ''}" style="width:${FIELD_WIDTHS[f.name] || 150}px">${escHtml(v)}</div></td>`;
   });
   tr.innerHTML = html;
@@ -3765,7 +3845,7 @@ function buildRowTr(row, rIdx, dupeInfo){
         thumbBtn.className = 'img-thumb';
         thumbBtn.title = 'Upload from desktop';
         const imgUrl = row.values[cIdx];
-        thumbBtn.innerHTML = imgUrl ? `<img src="${imgUrl}" alt="" loading="lazy" decoding="async">` : UPLOAD_ICON;
+        thumbBtn.innerHTML = imgUrl ? imgTag(imgUrl) : UPLOAD_ICON;
         const fileInput = document.createElement('input');
         fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
         thumbBtn.addEventListener('click', () => fileInput.click());
@@ -3995,7 +4075,7 @@ function buildCard(row, status, pct, rowStarted, sel, placed){
           title="Position — type a new number and press Enter to move this product"
           onfocus="this.select()" onkeydown="posKey(event, this, ri(${id}))" onchange="setPosition(ri(${id}), this.value, this)">` : ``}
       </div>
-      <div class="mcard-thumb">${imgUrl ? `<img src="${escHtml(imgUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="mcard-noimg">No photo</span>`}</div>
+      <div class="mcard-thumb">${imgUrl ? imgTag(imgUrl) : `<span class="mcard-noimg">No photo</span>`}</div>
       <div class="mcard-body">
         <div class="mcard-title${name?'':' untitled'}">${name ? escHtml(name) : (rowStarted ? 'Untitled product' : 'Empty row')}</div>
         <div class="mcard-sub">${rowStarted ? escHtml(subLine) : 'Tap to start entering a product'}</div>
@@ -4890,7 +4970,7 @@ function buildFocusedImageField(f, row, cIdx){
   const box = document.createElement('div');
   box.style.cssText = 'position:relative;width:220px;height:220px;border:1.5px dashed var(--hairline-strong);background:var(--white);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;';
   const imgUrl = row.values[cIdx];
-  box.innerHTML = imgUrl ? `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;">` : UPLOAD_ICON;
+  box.innerHTML = imgUrl ? imgTag(imgUrl, ' style="width:100%;height:100%;object-fit:cover;"') : UPLOAD_ICON;
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
@@ -5187,7 +5267,9 @@ function thumbUrl(url){
 }
 async function photoToJpeg(url){
   let blob = null;
-  const small = thumbUrl(url);
+  const own = imgPathFromUrl(url) ? smallImg(url) : null;            // our own small copy (fast)
+  if(own && own !== url){ try{ blob = await fetchImageBlob(own, 8000); }catch(e){ blob = null; } }
+  const small = blob ? null : thumbUrl(url);
   if(small){ try{ blob = await fetchImageBlob(small, 8000); }catch(e){ blob = null; } }
   if(!blob) blob = await fetchImageBlob(url, 25000);
   const bmp = await withTimeout(createImageBitmap(blob), 10000, 'decode');
