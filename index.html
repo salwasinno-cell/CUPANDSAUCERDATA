@@ -217,6 +217,10 @@
   .bulk-count{font-size:12.5px;color:var(--brass-light);font-weight:600;margin-right:6px;white-space:nowrap;}
   .bulk-bar select, .bulk-bar input[type=text]{font-family:inherit;font-size:12.5px;padding:7px 10px;border-radius:2px;border:1px solid #45464B;background:#111214;color:#EDEBE3;}
   .bulk-bar .spacer{flex:1;}
+  .bulk-bar .bulk-move{display:inline-flex;align-items:center;gap:6px;}
+  .bulk-bar .bulk-pos{width:92px;}
+  .holdable{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  .drag-ghost{position:fixed;top:-100px;left:-100px;background:var(--charcoal);color:#fff;font-size:12px;font-weight:600;padding:7px 12px;border-radius:6px;border:1px solid var(--brass);}
 
   /* ---------- Modal (manage lists) ---------- */
   .modal-overlay{position:fixed;inset:0;background:rgba(27,28,31,0.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;}
@@ -769,7 +773,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.17.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.17.4</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -957,6 +961,12 @@
   <span id="bulkValueWrap"></span>
   <button class="btn-brass" onclick="applyBulkField()">Apply</button>
   <span class="spacer"></span>
+  <span class="bulk-move" title="Move all ticked products together">
+    <button class="btn-ghost holdable" type="button" data-hold="-1" onclick="bulkMove(-1)" title="Move ticked products up (hold to keep moving)">↑ Up</button>
+    <button class="btn-ghost holdable" type="button" data-hold="1" onclick="bulkMove(1)" title="Move ticked products down (hold to keep moving)">↓ Down</button>
+    <input type="text" inputmode="numeric" class="bulk-pos" placeholder="Move to #" aria-label="Move ticked products to position"
+      onkeydown="if(event.key==='Enter'){event.preventDefault(); bulkMoveTo(this); this.blur();}">
+  </span>
   <button class="btn-ghost" onclick="bulkDuplicate()">Duplicate Selected</button>
   <div class="more-wrap export-wrap">
     <button class="btn-ghost" type="button" onclick="toggleExportMenu(event, 'bulkExportMenu')">⬇ Export Selected ▾</button>
@@ -1064,7 +1074,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.17.1';
+const APP_VERSION = '2026.10.17.4';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -1199,6 +1209,7 @@ document.getElementById('statFields').textContent = flatFields.length;
    STATE
    ======================================================================== */
 let focusedRowIdx = 0;   // declared early: renderBody() reads it
+let focusedRowId = null; // the product open in Focused Mode — followed by id, so it never switches to another product
 let initialLoadDone = false;
 let rows = [];              // [{ id, values, createdAt, createdBy, lastEditedAt, lastEditedBy }]
 let dynamicStaff = [];
@@ -1754,20 +1765,49 @@ document.addEventListener('error', ev => {
   im.src = orig;
   if(imgPathFromUrl(orig)) queueThumb(orig);
 }, true);
+/* Photo files are removed only when it is really safe: a few minutes later, and only if no
+   product uses that photo any more (on this screen, on the server, or in Undo/Redo here).
+   So Undo after deleting a product brings its photo back, and duplicated products that
+   share one photo never lose it when one of them is deleted. */
+const IMG_DELETE_DELAY = 5 * 60 * 1000;
+const pendingImgDeletes = new Map();     // url → time it stopped being used
 function deleteProductImageByUrl(url){
-  // Fire-and-forget cleanup so replaced/removed/deleted photos don't pile up in Storage.
-  if(!url) return;
-  const marker = `/${IMAGE_BUCKET}/`;
-  const i = url.indexOf(marker);
-  if(i === -1) return;
-  const path = decodeURIComponent(url.slice(i + marker.length).split('?')[0]);
-  if(!path) return;
-  const paths = [path];
-  if(!path.startsWith(THUMB_PREFIX)) paths.push(thumbPathFor(path));   // remove its small copy too
-  sb.storage.from(IMAGE_BUCKET).remove(paths).then(({error})=>{
-    if(error) console.error('Image cleanup failed for', path, error);
-  });
+  if(!url || !imgPathFromUrl(url)) return;
+  pendingImgDeletes.set(url, Date.now());
 }
+function imgStillReferenced(url){
+  if(rows.some(r => r.values.includes(url))) return true;
+  try{
+    const inStep = st => st && [st.before, st.after].some(m => m && Array.from(m.values ? m.values() : []).some(r => r && Array.isArray(r.values) && r.values.includes(url)));
+    if(undoStack.some(inStep) || redoStack.some(inStep)) return true;
+  }catch(e){ return true; }
+  return false;
+}
+let imgCleanupBusy = false;
+async function runImageCleanup(){
+  if(imgCleanupBusy || !pendingImgDeletes.size || typeof sb === 'undefined' || !sb) return;
+  imgCleanupBusy = true;
+  try{
+    const now = Date.now();
+    for(const [url, t] of Array.from(pendingImgDeletes)){
+      if(now - t < IMG_DELETE_DELAY) continue;
+      if(rows.some(r => r.values.includes(url))){ pendingImgDeletes.delete(url); continue; }   // in use again
+      if(imgStillReferenced(url)) continue;            // Undo could still bring it back — check again later
+      // does any product on the server (another device) still use it?
+      let inUse = true;
+      try{
+        const { data, error } = await sb.from('products').select('id').contains('values', [url]).limit(1);
+        inUse = !!error || (data && data.length > 0);
+      }catch(e){ inUse = true; }
+      pendingImgDeletes.delete(url);
+      if(inUse) continue;                    // still used somewhere → keep the file
+      const path = imgPathFromUrl(url);
+      const { error } = await sb.storage.from(IMAGE_BUCKET).remove([path, thumbPathFor(path)]);
+      if(error) console.error('Image cleanup failed for', path, error);
+    }
+  } finally { imgCleanupBusy = false; }
+}
+setInterval(runImageCleanup, 60 * 1000);
 
 /* ---- Initial data load ---- */
 async function fetchAllData(){
@@ -2801,8 +2841,22 @@ document.addEventListener('keydown', e=>{
 /* ---- Keep filled products together at the top and all empty rows at the bottom.
    Stable: the original order inside each group is kept, so nothing else shuffles.
    Also re-points Focused Mode at the same product if its position changed. ---- */
+function focusedIsOpen(){ const o = document.getElementById('focusedOverlay'); return !!(o && o.classList.contains('show')); }
+/* Point Focused Mode at the same product after anything moved, was inserted or deleted.
+   If another device deleted it, close the view (nothing gets typed into a removed product). */
+function refocusById(){
+  if(focusedRowId === null) return true;
+  const i = rows.findIndex(r => r.id === focusedRowId);
+  if(i !== -1){ focusedRowIdx = i; return true; }
+  if(focusedIsOpen()){
+    focusedRowId = null;
+    document.getElementById('focusedOverlay').classList.remove('show');
+    setTimeout(() => showToast('This product was deleted, so its form was closed'), 0);
+  }
+  return false;
+}
 function sortEmptyRowsLast(){
-  const focusedId = rows[focusedRowIdx] ? rows[focusedRowIdx].id : null;
+  const focusedId = focusedRowId !== null ? focusedRowId : (rows[focusedRowIdx] ? rows[focusedRowIdx].id : null);
   if(HAS_SORT_COLUMN) sortRowsByPosition();
   else if(orderNeedsApply){ orderNeedsApply = false; applyProductOrder(); }
   const placed = [], loose = [];
@@ -2812,6 +2866,7 @@ function sortEmptyRowsLast(){
     const i = rows.findIndex(r => r.id === focusedId);
     if(i !== -1) focusedRowIdx = i;
   }
+  if(focusedRowId !== null) refocusById();
 }
 
 /* ---- Long free-text fields wrap onto several lines and the row grows to fit,
@@ -3301,7 +3356,7 @@ function restoreAnchor(a){
   else { const sc = tableScrollEl(); sc.scrollTop += delta; vUpdate(); }
   el.classList.add('just-moved'); setTimeout(() => el.classList.remove('just-moved'), 1200);
 }
-function moveRow(from, insertBefore, anchorTop){
+function moveRow(from, insertBefore, anchorTop, keepView){
   if(from < 0 || from >= rows.length) return;
   const anchor = captureAnchor(rows[from].id, anchorTop);
   insertBefore = Math.max(0, Math.min(rows.length, insertBefore));
@@ -3314,7 +3369,7 @@ function moveRow(from, insertBefore, anchorTop){
     renumberOrder();
   });
   commitOrder();
-  restoreAnchor(anchor);
+  if(!keepView) restoreAnchor(anchor);
 }
 /* =====================================================================
    LEARNED OPTIONS — anything typed into a dropdown field (Color, Brand,
@@ -3433,7 +3488,117 @@ function handleGridPaste(e, rIdx, cIdx){
   });
 }
 
-function moveRowUp(idx){ moveRow(idx, idx - 1); }
+function moveRowUp(idx){ const g = groupFor(idx); if(g) return stepGroup(g, -1, idx); if(rows[idx] && isPlaced(rows[idx]) && visibleIdxIfFiltered()) return stepGroup([idx], -1, idx); moveRow(idx, idx - 1); }
+
+/* =====================================================================
+   MOVE SEVERAL PRODUCTS TOGETHER — tick products, then drag one of them,
+   press/hold ↑ ↓, type a position number, or use the bar at the bottom:
+   all the ticked products move as one block, in their current order.
+   ===================================================================== */
+function placedCount(){ let n = 0; rows.forEach((r, i) => { if(isPlaced(r)) n = i + 1; }); return n; }
+function selectedPlacedIdx(){ const out = []; rows.forEach((r, i) => { if(selectedRowIds.has(r.id) && isPlaced(r)) out.push(i); }); return out; }
+function groupFor(idx){
+  const r = rows[idx];
+  if(!r || !selectedRowIds.has(r.id)) return null;
+  const g = selectedPlacedIdx();
+  return g.length > 1 ? g : null;
+}
+function applyGroupOrder(newRows, label){
+  if(newRows.every((r, i) => r === rows[i])) return false;      // nothing changes
+  mutateWithHistory(label, () => { rows = newRows; renumberOrder(); });
+  commitOrder();
+  return true;
+}
+function groupLabel(n, first){ return `Moved ${n} products to #${first}–#${first + n - 1}`; }
+/* Put the block so that it starts at rest-position `at` (0-based, counted without the block) */
+function placeGroupAt(idxs, at){
+  const set = new Set(idxs.map(i => rows[i].id));
+  const moving = idxs.map(i => rows[i]);
+  const rest = rows.filter(r => !set.has(r.id));
+  let restPlaced = 0; rest.forEach((r, i) => { if(isPlaced(r)) restPlaced = i + 1; });
+  at = Math.max(0, Math.min(restPlaced, at));
+  const next = rest.slice(0, at).concat(moving, rest.slice(at));
+  return { next, first: at + 1 };
+}
+function moveGroupTo(idxs, insertBefore, keepView){
+  // insertBefore = index in the current list the block should land in front of
+  const set = new Set(idxs.map(i => rows[i].id));
+  let at = 0; for(let i = 0; i < Math.min(insertBefore, rows.length); i++) if(!set.has(rows[i].id)) at++;
+  const { next, first } = placeGroupAt(idxs, at);
+  const view = keepView ? holdView() : null;
+  if(applyGroupOrder(next, groupLabel(idxs.length, first))) showToast(`${idxs.length} products moved to #${first}–#${first + idxs.length - 1}`);
+  if(view) view();
+}
+function stepGroup(idxs, dir, clickedIdx){
+  // every ticked product moves one place up (dir −1) or down (+1); the block stays together
+  const anchor = (clickedIdx != null && rows[clickedIdx]) ? captureAnchor(rows[clickedIdx].id) : null;
+  const sel = new Set(idxs.map(i => rows[i].id));
+  const arr = rows.slice(), n = placedCount();
+  // With a search or filter on, step past the products you can SEE (hidden ones keep their places)
+  const vis = visibleIdxIfFiltered();
+  const slots = vis ? vis.filter(i => i < n) : Array.from({ length: n }, (_, i) => i);
+  const seq = slots.map(i => arr[i]);
+  if(dir < 0){ for(let i = 1; i < seq.length; i++) if(sel.has(seq[i].id) && !sel.has(seq[i-1].id)){ const t = seq[i]; seq[i] = seq[i-1]; seq[i-1] = t; } }
+  else       { for(let i = seq.length - 2; i >= 0; i--) if(sel.has(seq[i].id) && !sel.has(seq[i+1].id)){ const t = seq[i]; seq[i] = seq[i+1]; seq[i+1] = t; } }
+  slots.forEach((slot, k) => { arr[slot] = seq[k]; });
+  const firstIdx = arr.findIndex(r => sel.has(r.id));
+  if(applyGroupOrder(arr, idxs.length > 1 ? `Moved ${idxs.length} products ${dir < 0 ? 'up' : 'down'}` : `Moved ${(rows[idxs[0]].values[IDX["Product Name EN"]] || '').trim() || 'product'} ${dir < 0 ? 'up' : 'down'}`) && anchor) restoreAnchor(anchor);
+  return firstIdx;
+}
+/* Keep the page exactly where it is (returns a function that puts it back) */
+function holdView(){
+  const sc = tableScrollEl();
+  const keep = { win: window.scrollY, tbl: sc ? sc.scrollTop : 0 };
+  const put = () => {
+    if(Math.abs(window.scrollY - keep.win) >= 1 || (sc && Math.abs(sc.scrollTop - keep.tbl) >= 1)){
+      markIntendedScroll();
+      window.scrollTo(window.scrollX, keep.win);
+      if(sc){ sc.scrollTop = keep.tbl; if(!isPhoneView()) vUpdate(); }
+    }
+  };
+  return () => { put(); requestAnimationFrame(() => { put(); requestAnimationFrame(put); setTimeout(put, 120); }); };
+}
+/* Bottom bar buttons */
+function bulkMove(dir){
+  const g = selectedPlacedIdx();
+  if(!g.length){ showToast('Tick the products you want to move first'); return; }
+  if(g.length === 1){ dir < 0 ? moveRowUp(g[0]) : moveRowDown(g[0]); return; }
+  // follow the block on screen (the first ticked product stays under your finger)
+  stepGroup(g, dir, g[0]);
+}
+function bulkMoveTo(el){
+  const g = selectedPlacedIdx();
+  const t = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10);
+  el.value = '';
+  if(!g.length || isNaN(t)) return;
+  if(g.length === 1){ setPosition(g[0], t); return; }
+  const { next, first } = placeGroupAt(g, t - 1);
+  const view = holdView();
+  if(applyGroupOrder(next, groupLabel(g.length, first))) showToast(`${g.length} products moved to #${first}–#${first + g.length - 1}`);
+  view();
+}
+/* Press and hold ↑ / ↓ to keep moving (works with one product or a ticked group) */
+let holdTimer = null, holdRepeats = 0, holdSwallowClick = false;
+function stopHold(){ clearTimeout(holdTimer); clearInterval(holdTimer); holdTimer = null; }
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest && e.target.closest('[data-hold]');
+  if(!b || (e.button !== undefined && e.button !== 0)) return;
+  const dir = +b.dataset.hold, id = b.dataset.holdId;
+  const fire = () => {
+    if(id){ const i = ri(+id); if(i < 0) return stopHold(); dir < 0 ? moveRowUp(i) : moveRowDown(i); }
+    else bulkMove(dir);
+  };
+  stopHold(); holdRepeats = 0; holdSwallowClick = false;
+  holdTimer = setTimeout(() => { holdTimer = setInterval(() => { holdRepeats++; holdSwallowClick = true; fire(); }, 190); holdRepeats++; holdSwallowClick = true; fire(); }, 420);
+}, true);
+document.addEventListener('pointerup', stopHold, true);
+document.addEventListener('pointercancel', stopHold, true);
+window.addEventListener('blur', e => { if(e.target === window) stopHold(); });
+document.addEventListener('click', e => {
+  if(holdSwallowClick && e.target.closest && e.target.closest('[data-hold]')){ e.stopPropagation(); e.preventDefault(); }
+  holdSwallowClick = false;
+}, true);
+document.addEventListener('contextmenu', e => { if(e.target.closest && e.target.closest('[data-hold]')) e.preventDefault(); }, true);
 
 /* ---- Type a position number to move a product there.
    e.g. product 68 → type 40: it becomes #40 and #40–#67 each move down by one
@@ -3453,19 +3618,42 @@ function setPosition(rIdx, raw, el){
   let target = parseInt(String(raw).replace(/[^0-9]/g,''), 10);
   if(isNaN(target)){ if(el) el.value = rIdx + 1; return; }
   target = Math.max(1, Math.min(filledCount, target));
+  const grp = groupFor(rIdx);
+  if(grp){
+    // ticked products move together: the block starts at the number you typed
+    const { next, first } = placeGroupAt(grp, target - 1);
+    const view = holdView();
+    if(applyGroupOrder(next, groupLabel(grp.length, first))) showToast(`${grp.length} products moved to #${first}–#${first + grp.length - 1}`);
+    else if(el) el.value = rIdx + 1;
+    view();
+    return;
+  }
   if(target === rIdx + 1){ if(el) el.value = rIdx + 1; return; }
   const to = target - 1;
-  moveRow(rIdx, to < rIdx ? to : to + 1);
-  // briefly highlight the product in its new place
+  // Stay exactly where you are on the page — the product moves, the screen doesn't.
+  const sc = tableScrollEl();
+  const keep = { win: window.scrollY, tbl: sc ? sc.scrollTop : 0 };
+  const hold = () => {
+    if(Math.abs(window.scrollY - keep.win) >= 1 || (sc && Math.abs(sc.scrollTop - keep.tbl) >= 1)){
+      markIntendedScroll();
+      window.scrollTo(window.scrollX, keep.win);
+      if(sc){ sc.scrollTop = keep.tbl; if(!isPhoneView()) vUpdate(); }
+    }
+  };
+  moveRow(rIdx, to < rIdx ? to : to + 1, null, true);
+  hold();
   requestAnimationFrame(()=>{
-    const tr = ensureRowRendered(to, true);
+    hold();
+    // highlight it in its new place only if that place is already on screen
+    const tr = isPhoneView() ? null : vTrs.get(to);
     const card = document.querySelector(`.mcard[data-row-index="${to}"]`);
     [tr, card].forEach(x=>{ if(!x) return; x.classList.add('just-moved'); setTimeout(()=>x.classList.remove('just-moved'), 1600); });
-    if(card && getComputedStyle(card.parentNode).display !== 'none'){ markIntendedScroll(); card.scrollIntoView({block:'center', behavior:'smooth'}); }
-    // (desktop: ensureRowRendered already scrolled the table to it)
+    requestAnimationFrame(hold);
+    setTimeout(hold, 120);
+    showToast(`Moved to #${target} — the list was renumbered`);
   });
 }
-function moveRowDown(idx){ moveRow(idx, idx + 2); }
+function moveRowDown(idx){ const g = groupFor(idx); if(g) return stepGroup(g, 1, idx); if(rows[idx] && isPlaced(rows[idx]) && visibleIdxIfFiltered()) return stepGroup([idx], 1, idx); moveRow(idx, idx + 2); }
 
 /* Sort all products by a column. Empty values go last; empty rows stay at the bottom. */
 const SORT_LABELS = {
@@ -3503,7 +3691,7 @@ function applySort(key){
 }
 
 /* Desktop: drag a product by its ⠿ handle */
-let dragFromIdx = null;
+let dragFromIdx = null, dragGroup = null;
 function clearDropMarks(){ document.querySelectorAll('#tbody tr.drop-above, #tbody tr.drop-below').forEach(t=>t.classList.remove('drop-above','drop-below')); }
 function setupRowDrag(){
   const tbody = document.getElementById('tbody');
@@ -3519,6 +3707,15 @@ function setupRowDrag(){
     const tr = e.target.closest && e.target.closest('tr'); if(!tr || !tr.draggable) return;
     dragFromIdx = parseInt(tr.dataset.rowIndex, 10);
     tr.classList.add('dragging');
+    dragGroup = groupFor(dragFromIdx);
+    if(dragGroup){
+      vTrs.forEach((t, i) => { if(dragGroup.includes(i)) t.classList.add('dragging'); });
+      try{
+        const ghost = document.createElement('div');
+        ghost.className = 'drag-ghost'; ghost.textContent = `${dragGroup.length} products`;
+        document.body.appendChild(ghost); e.dataTransfer.setDragImage(ghost, 20, 16);
+      }catch(_){}
+    }
     e.dataTransfer.effectAllowed = 'move';
     try{ e.dataTransfer.setData('text/plain', String(dragFromIdx)); }catch(_){}
   });
@@ -3537,8 +3734,9 @@ function setupRowDrag(){
     e.preventDefault();
     const idx = parseInt(tr.dataset.rowIndex, 10);
     const below = tr.classList.contains('drop-below');
-    const from = dragFromIdx;
-    dragFromIdx = null; clearDropMarks();
+    const from = dragFromIdx, grp = dragGroup;
+    dragFromIdx = null; dragGroup = null; clearDropMarks();
+    if(grp){ if(!grp.includes(idx)) moveGroupTo(grp, below ? idx + 1 : idx, true); return; }
     const rr = tr.getBoundingClientRect();
     const fromTr = vTrs.get(from), h = fromTr ? fromTr.getBoundingClientRect().height : rr.height;
     // dropped above a row → it takes that row's place; dropped below → it sits just under it
@@ -3546,7 +3744,8 @@ function setupRowDrag(){
     moveRow(from, below ? idx + 1 : idx, dropTop);
   });
   tbody.addEventListener('dragend', e=>{
-    dragFromIdx = null; clearDropMarks();
+    dragFromIdx = null; dragGroup = null; clearDropMarks();
+    document.querySelectorAll('.drag-ghost').forEach(g => g.remove());
     tbody.querySelectorAll('tr.dragging').forEach(t=>t.classList.remove('dragging'));
     tbody.querySelectorAll('tr[draggable="true"]').forEach(t=>t.draggable=false);
   });
@@ -4090,8 +4289,8 @@ function buildCard(row, status, pct, rowStarted, sel, placed){
       </div>
       <div class="mcard-actions" onclick="event.stopPropagation()">
         ${placed ? `<div class="mcard-move mcard-move-ud">
-          <button class="icon" title="Move up" onclick="moveRowUp(ri(${id}))">↑</button>
-          <button class="icon" title="Move down" onclick="moveRowDown(ri(${id}))">↓</button>
+          <button class="icon holdable" title="Move up (hold to keep moving)" data-hold="-1" data-hold-id="${id}" onclick="moveRowUp(ri(${id}))">↑</button>
+          <button class="icon holdable" title="Move down (hold to keep moving)" data-hold="1" data-hold-id="${id}" onclick="moveRowDown(ri(${id}))">↓</button>
           <button class="icon insrow" title="Insert a new product below" onclick="insertRowBelow(ri(${id}))">${INSERT_ICON}</button>
         </div>` : ``}
         <div class="mcard-move">
@@ -4236,6 +4435,7 @@ function refreshRowIndicators(rIdx, dupeInfo){
   }
 }
 function refreshFocusedHeader(){
+  refocusById();
   const row = rows[focusedRowIdx];
   if(!row) return;
   const status = computeStatus(row);
@@ -4300,7 +4500,7 @@ function updateSubcategoryFilterOptions(){
 }
 document.getElementById('fCategory').addEventListener('change', ()=>{ updateSubcategoryFilterOptions(); applyFilters(); });
 
-function applyFilters(forceRebuild){
+function buildFilterPass(){
   const q = (document.getElementById('searchBox').value || "").toLowerCase().trim();
   const onlyIncomplete = document.getElementById('onlyIncomplete').checked;
   const onlyDupes = document.getElementById('onlyDupes').checked;
@@ -4335,6 +4535,16 @@ function applyFilters(forceRebuild){
     if(show && activeViewExtra==='ready') { const s=computeStatus(row); show = (s==='Ready'||s==='Published'); }
     return show;
   };
+  return pass;
+}
+/* Row indices you can currently see (search / filters applied), or null when nothing is filtered */
+function visibleIdxIfFiltered(){
+  const pass = buildFilterPass();
+  const out = []; rows.forEach((r, i) => { if(pass(r)) out.push(i); });
+  return out.length === rows.length ? null : out;
+}
+function applyFilters(forceRebuild){
+  const pass = buildFilterPass();
   if(isPhoneView()){
     document.querySelectorAll('#mobileCards .mcard').forEach(card=>{
       const row = rows[parseInt(card.dataset.rowIndex,10)];
@@ -4770,21 +4980,25 @@ let focusedStep = 'identification';
 function openFocusedMode(rIdx){
   if(!rows.length) return;
   focusedRowIdx = Math.max(0, Math.min(rIdx, rows.length-1));
+  focusedRowId = rows[focusedRowIdx].id;
   focusedStep = 'identification';
   document.getElementById('focusedOverlay').classList.add('show');
   renderFocusedMode();
 }
 function closeFocusedMode(){
+  focusedRowId = null;
   document.getElementById('focusedOverlay').classList.remove('show');
   renderBody();
 }
-function focusedPrev(){ if(focusedRowIdx>0){ focusedRowIdx--; renderFocusedMode(); } }
-function focusedNext(){ if(focusedRowIdx<rows.length-1){ focusedRowIdx++; renderFocusedMode(); } }
+function focusedPrev(){ refocusById(); if(focusedRowIdx>0){ focusedRowIdx--; focusedRowId = rows[focusedRowIdx].id; renderFocusedMode(); } }
+function focusedNext(){ refocusById(); if(focusedRowIdx<rows.length-1){ focusedRowIdx++; focusedRowId = rows[focusedRowIdx].id; renderFocusedMode(); } }
 function selectFocusedStep(key){ focusedStep = key; renderFocusedMode(); }
 
 function renderFocusedMode(){
   closeComboMenu();
+  if(!refocusById()) return;
   const row = rows[focusedRowIdx];
+  if(!row) return;
   const status = computeStatus(row);
   const pct = rowCompletionPct(row);
 
