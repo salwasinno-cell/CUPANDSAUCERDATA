@@ -486,6 +486,19 @@
   .combo-opt.active{background:var(--brass-light);}
   .combo-opt.selected{font-weight:600;}
   .combo-opt b{color:var(--brass-dim);font-weight:600;}
+  .combo-head{font-size:11px;color:var(--ink-soft);padding:6px 10px 7px;border-bottom:1px solid var(--hairline);margin-bottom:4px;display:flex;align-items:center;gap:8px;justify-content:space-between;white-space:nowrap;}
+  .combo-head > span:first-child{white-space:nowrap;}
+  .combo-head b{color:var(--brass-dim);}
+  .combo-count{background:var(--brass-light);color:var(--brass-dim);font-weight:600;border-radius:10px;padding:1px 8px;font-size:10.5px;}
+  .combo-group{font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--brass-dim);padding:9px 11px 4px;}
+  .combo-opt.multi{justify-content:flex-start;gap:10px;}
+  .combo-check{width:16px;height:16px;flex-shrink:0;border:1.5px solid var(--hairline-strong);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;background:var(--white);}
+  .combo-opt.selected .combo-check{background:var(--brass);border-color:var(--brass);}
+  .combo-label{flex:1;}
+  .combo-main{font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--brass-dim);border:1px solid var(--brass);border-radius:10px;padding:1px 7px;}
+  .combo-foot{position:sticky;bottom:-5px;background:var(--white);border-top:1px solid var(--hairline);margin-top:4px;padding:6px 6px 4px;display:flex;justify-content:flex-end;}
+  .combo-done{font-family:inherit;font-size:12px;font-weight:600;background:var(--charcoal);color:#fff;border:none;border-radius:5px;padding:6px 16px;cursor:pointer;}
+  .f-multi-hint{font-size:10.5px;font-weight:400;letter-spacing:normal;text-transform:none;color:var(--ink-soft);margin-top:3px;}
   .combo-empty{padding:10px 12px;color:var(--ink-soft);font-size:12px;}
 
   /* focused mode uses the same dropdown */
@@ -773,7 +786,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.17.4</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.20.3</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -952,9 +965,11 @@
   <span class="bulk-count" id="bulkCount">0 selected</span>
   <select id="bulkField" onchange="updateBulkValueControl()">
     <option value="Main Category">Main Category</option>
+    <option value="Subcategory">Subcategory</option>
     <option value="Brand">Brand</option>
     <option value="Material">Material</option>
     <option value="Color">Color</option>
+    <option value="Rim">Rim</option>
     <option value="Stock Status">Stock Status</option>
     <option value="Review Status">Review Status</option>
   </select>
@@ -1074,7 +1089,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.17.4';
+const APP_VERSION = '2026.10.20.3';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -1113,7 +1128,7 @@ if(SUPABASE_NOT_CONFIGURED){
 /* ========================================================================
    SCHEMA
    ======================================================================== */
-const CATALOG_VERSION = 3; // bump when the default catalog below changes, so saved configs pick it up once
+const CATALOG_VERSION = 4; // bump when the default catalog below changes, so saved configs pick it up once
 const CATEGORY_SUBCATS = {
   "Tableware": ["Dinner Sets","Plates","Bowls","Flatware","Serveware","Dessert","Platters","Salad & Pasta","Condiments & Dips"],
   "Drinkware": ["Coffee","Tea","Cups","Mugs","Containers","Pots","Carafes"],
@@ -1172,6 +1187,7 @@ const schema = [
     { name:"Description EN", type:"text", required:true },
     { name:"Description AR", type:"text", required:true, rtl:true },
     { name:"Color", type:"combo", options: [] },
+    { name:"Rim", type:"combo", options: ["No Rim","Clear","Gold","Silver"] },
     { name:"Material", type:"combo-material" },
     { name:"Pieces Number", type:"number" },
     { name:"Suitable For / Persons", type:"number" },
@@ -1202,6 +1218,15 @@ const schema = [
 const flatFields = schema.flatMap(g => g.fields.map(f => ({...f, section:g.section})));
 const IDX = {};
 flatFields.forEach((f,i)=> IDX[f.name]=i);
+/* How values are SAVED (database, backups): the original order, with fields added later at
+   the end. On screen, a field can sit anywhere (Rim shows right after Color) — values are
+   converted at the save/load boundary only, so existing products never shift. */
+const FIELDS_ADDED_LATER = ["Rim"];
+const STORE_FIELDS = flatFields.map(f => f.name).filter(n => !FIELDS_ADDED_LATER.includes(n)).concat(FIELDS_ADDED_LATER);
+const STORE_LEN = STORE_FIELDS.length;
+const D2S = flatFields.map(f => STORE_FIELDS.indexOf(f.name));     // screen position → saved position
+const S2D = STORE_FIELDS.map(n => IDX[n]);                          // saved position → screen position
+function toStoreVals(disp){ return S2D.map(d => (disp[d] === undefined || disp[d] === null) ? "" : disp[d]); }
 document.getElementById('fieldCountTop').textContent = flatFields.length;
 document.getElementById('statFields').textContent = flatFields.length;
 
@@ -1213,7 +1238,8 @@ let focusedRowId = null; // the product open in Focused Mode — followed by id,
 let initialLoadDone = false;
 let rows = [];              // [{ id, values, createdAt, createdBy, lastEditedAt, lastEditedBy }]
 let dynamicStaff = [];
-let dynamicCollections = ["Signature","Everyday Essentials","Ramadan","Christmas & Holidays","Summer","Gifting"];
+const COLLECTIONS_V4 = ["Christmas","Ramadan","Nouran","Ward","Oriental"];
+let dynamicCollections = COLLECTIONS_V4.slice();
 /* All collection names: the managed list + any value already used on a product */
 function allCollections(){
   const out = dynamicCollections.slice();
@@ -1230,11 +1256,12 @@ function addCollectionIfNew(val){
    that have one value fewer, so slot an empty Collection in at the right position
    instead of letting every later column shift by one. */
 function normalizeRowValues(values){
+  // saved order → screen order
   const v = Array.isArray(values) ? values.slice() : [];
-  const ci = IDX["Collection"];
-  if(ci > -1 && v.length === flatFields.length - 1) v.splice(ci, 0, "");
-  while(v.length < flatFields.length) v.push("");
-  return v;
+  const ci = STORE_FIELDS.indexOf("Collection");
+  if(ci > -1 && v.length === STORE_LEN - FIELDS_ADDED_LATER.length - 1) v.splice(ci, 0, "");   // very old products saved before Collection existed
+  while(v.length < STORE_LEN) v.push("");
+  return D2S.map(si => v[si] === undefined || v[si] === null ? "" : v[si]);
 }
 let currentUser = localStorage.getItem('cs_pde_user') || '';
 let skuCounter = 0;
@@ -1290,7 +1317,7 @@ function newId(){
 function toProductRecord(row, vals){
   return {
     id: row.id,
-    values: vals || row.values,
+    values: toStoreVals(vals || row.values),
     created_at: new Date(row.createdAt || Date.now()).toISOString(),
     created_by: row.createdBy || currentUser || 'Unassigned',
     updated_at: new Date(row.lastEditedAt || Date.now()).toISOString(),
@@ -1359,7 +1386,7 @@ async function patchRow(r){
   if(!idx.length) return true;
   const vals = idx.map(i => sv(r.values[i]));
   if(HAS_PATCH_FN){
-    const { data, error } = await sb.rpc('patch_product_values', { p_id: r.id, p_idx: idx, p_vals: vals, p_updated_by: currentUser || 'Unassigned' });
+    const { data, error } = await sb.rpc('patch_product_values', { p_id: r.id, p_idx: idx.map(i => D2S[i]), p_vals: vals, p_updated_by: currentUser || 'Unassigned' });
     if(!error){
       if(data === null || data === undefined || data === false){
         // the product isn't on the server any more (deleted on another device) → put it back with everything typed
@@ -1462,7 +1489,7 @@ function writeOutbox(){
       if(!rowNeedsSave(r)) return;
       if(!r._onServer){ saves[r.id] = { rec: { ...toProductRecord(r, r.values.slice()), sortOrder: r.sortOrder ?? null } }; return; }
       const f = {};
-      dirtyFields(r).forEach(i => { f[i] = { v: sv(r.values[i]), base: sv(r._saved[i]) }; });
+      dirtyFields(r).forEach(i => { f[D2S[i]] = { v: sv(r.values[i]), base: sv(r._saved[i]) }; });   // saved positions
       saves[r.id] = { f };
     });
     const deletes = [...pendingDeletes];
@@ -1492,7 +1519,9 @@ function replayOutbox(){
       saveQueue.add(r.id); n++; return;
     }
     if(!r || !e.f) return;
-    Object.entries(e.f).forEach(([i, x]) => {
+    Object.entries(e.f).forEach(([si, x]) => {
+      const i = S2D[+si];
+      if(i === undefined) return;
       const cur = sv(r.values[i]);
       // only re-apply if nobody else changed that field on the server in the meantime
       if(cur === x.base && cur !== x.v){ r.values[i] = x.v; n++; }
@@ -1661,6 +1690,7 @@ function applyConfig(data){
   }
   if(data.dynamicStaff) dynamicStaff = data.dynamicStaff;
   if(Array.isArray(data.dynamicCollections)) dynamicCollections = data.dynamicCollections;
+  if(savedVersion < 4) dynamicCollections = COLLECTIONS_V4.slice();   // v4: the collection list is exactly these (products keep whatever they already have)
   if(data.customOptions && typeof data.customOptions === 'object') customOptions = data.customOptions;
   seedColorList();
   if(!HAS_SORT_COLUMN && Array.isArray(data.productOrder) && !orderSavePending){
@@ -2280,8 +2310,8 @@ function joinNatural(arr){
 function composeProductDescription(row){
   const v = name => lc(row.values[IDX[name]]);
   const name = v('Product Name EN') || 'This piece';
-  const category = v('Main Category');
-  const subcategory = v('Subcategory');
+  const category = lc(splitMulti(row.values[IDX['Main Category']])[0] || '');
+  const subcategory = lc(splitMulti(row.values[IDX['Subcategory']])[0] || '');
   const brand = v('Brand');
   const color = v('Color');
   const material = v('Material');
@@ -2379,6 +2409,8 @@ function addStaffIfNew(name){
   if(!dynamicStaff.some(s=>s.toLowerCase()===v.toLowerCase())){ dynamicStaff.push(v); scheduleConfigSave(); }
 }
 function addCategoryIfNew(val){
+  const parts = splitMulti(val);
+  if(parts.length > 1){ parts.forEach(addCategoryIfNew); return; }
   const v = (val||"").trim();
   if(!v) return;
   if(!dynamicCategories.some(c=>c.toLowerCase()===v.toLowerCase())){ dynamicCategories.push(v); scheduleConfigSave(); }
@@ -2694,7 +2726,7 @@ function scheduleAutosave(){
 function doAutosave(){
   try{
     const payload = {
-      rows: rows.map(r=>({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:r.values, createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
+      rows: rows.map(r=>({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:toStoreVals(r.values), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
       catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, currentUser, skuCounter,
       categorySubcatsOverride: CATEGORY_SUBCATS,
       materialsOverride: MATERIALS_BY_CATEGORY
@@ -2712,7 +2744,7 @@ function loadState(){
     if(payload.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, payload.materialsOverride);
     if(payload.dynamicCategories) dynamicCategories = payload.dynamicCategories;
     if(payload.dynamicStaff) dynamicStaff = payload.dynamicStaff;
-    if(Array.isArray(payload.dynamicCollections)) dynamicCollections = payload.dynamicCollections;
+    if(Array.isArray(payload.dynamicCollections)) dynamicCollections = (payload.catalogVersion||1) < 4 ? COLLECTIONS_V4.slice() : payload.dynamicCollections;
     if(payload.customOptions && typeof payload.customOptions === 'object') customOptions = payload.customOptions;
     if(Array.isArray(payload.productOrder)){ productOrder = payload.productOrder.map(String); orderNeedsApply = true; }
     if(payload.currentUser) currentUser = payload.currentUser;
@@ -2800,6 +2832,11 @@ function moveHorizontal(rIdx, colName, dir){
 }
 function handleCellKeydown(e, rIdx, f, cIdx){
   const t = e.target;
+  // an open dropdown list handles Enter / arrows / Escape itself (picking an option must win over "move to next row")
+  if(comboState && comboState.input === t && ['Enter','ArrowDown','ArrowUp','Escape'].includes(e.key)){
+    if(e.key === 'Enter' && !comboState.multi && !(comboState.active > -1 && comboState.items.length)){ /* nothing to pick → normal Enter */ }
+    else return;
+  }
   if(t && t.tagName === 'TEXTAREA'){
     const atStart = t.selectionStart === 0 && t.selectionEnd === 0;
     const atEnd = t.selectionStart === t.value.length && t.selectionEnd === t.value.length;
@@ -2981,14 +3018,52 @@ function ensureComboMenu(){
     closeComboMenu();
   }, true);
   window.addEventListener('resize', closeComboMenu);
-  document.addEventListener('scroll', e => { if(comboState && !comboMenuEl.contains(e.target)) closeComboMenu(); }, true);
+  document.addEventListener('scroll', e => {
+    if(!comboState || comboMenuEl.contains(e.target)) return;
+    if(performance.now() - (comboState.openedAt || 0) < 400){ renderComboMenu(comboState.filter); return; }   // the small scroll from focusing the field: keep the list open
+    closeComboMenu();
+  }, true);
   return comboMenuEl;
 }
 function closeComboMenu(){
   if(!comboState) return;
-  if(comboState.arrow) comboState.arrow.classList.remove('open');
+  const st = comboState;
+  if(st.arrow) st.arrow.classList.remove('open');
   comboState = null;
   if(comboMenuEl){ comboMenuEl.classList.remove('show'); comboMenuEl.innerHTML=''; }
+  // several-choice fields save once, when the list closes
+  if(st.multi && st.dirty) setTimeout(() => st.input.dispatchEvent(new Event('change', {bubbles:true})), 0);
+}
+function lastMultiToken(v){ const parts = String(v || '').split(','); return (parts[parts.length - 1] || '').trim(); }
+function renderMultiMenu(st, q){
+  const esc = x => String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const chosen = splitMulti(st.input.value).filter(x => !(q && x.toLowerCase() === q && !hasOpt(st.getOptions() || [], x)));
+  const isOn = o => chosen.some(c => c.toLowerCase() === o.toLowerCase());
+  const match = o => !q || o.toLowerCase().includes(q);
+  const groups = st.groups ? st.groups() : [{ label: null, items: st.getOptions() || [] }];
+  // values typed by hand (not in any list) are shown first so they can be unticked too
+  const listed = groups.flatMap(g => g.items).map(x => x.toLowerCase());
+  const own = (st.getOptions() || []).filter(o => !listed.includes(o.toLowerCase()));
+  const custom = chosen.filter(c => !listed.includes(c.toLowerCase()) && !own.some(o => o.toLowerCase() === c.toLowerCase()));
+  const sections = [];
+  if(custom.length) sections.push({ label: 'Typed by hand', items: custom });
+  groups.forEach(g => sections.push(g));
+  if(own.length && st.groups) sections.push({ label: 'Other', items: own });
+  const items = []; let html = `<div class="combo-head"><span>${st.isCategory ? 'Choose one or more · the first is the <b>main</b> category' : 'Choose one or more'}</span>${chosen.length ? `<span class="combo-count">${chosen.length} selected</span>` : ''}</div>`;
+  sections.forEach(sec => {
+    const vis = sec.items.filter(match);
+    if(!vis.length) return;
+    if(sec.label) html += `<div class="combo-group">${esc(sec.label)}</div>`;
+    vis.forEach(o => {
+      const i = items.length; items.push(o);
+      const on = isOn(o), main = st.isCategory && chosen.length > 1 && chosen[0].toLowerCase() === o.toLowerCase();
+      html += `<div class="combo-opt multi${i===st.active?' active':''}${on?' selected':''}" data-i="${i}"><span class="combo-check">${on ? '✓' : ''}</span><span class="combo-label">${esc(o)}</span>${main ? '<span class="combo-main">Main</span>' : ''}</div>`;
+    });
+  });
+  if(!items.length) html += `<div class="combo-empty">${q ? 'No match — press Enter to add “' + esc(lastMultiToken(st.input.value)) + '”' : st.emptyText}</div>`;
+  html += `<div class="combo-foot"><button type="button" class="combo-done">Done</button></div>`;
+  st.items = items; if(st.active >= items.length) st.active = items.length ? 0 : -1;
+  return html;
 }
 function renderComboMenu(filterText){
   const st = comboState; if(!st) return;
@@ -2997,6 +3072,10 @@ function renderComboMenu(filterText){
   const list = q ? all.filter(o=>o.toLowerCase().includes(q)) : all.slice();
   st.items = list; if(st.active >= list.length) st.active = list.length ? 0 : -1;
   const cur = (st.input.value||'').toLowerCase();
+  if(st.multi){
+    comboMenuEl.innerHTML = renderMultiMenu(st, q);
+    const done = comboMenuEl.querySelector('.combo-done'); if(done) done.addEventListener('click', () => closeComboMenu());
+  } else
   comboMenuEl.innerHTML = list.length
     ? list.map((o,i)=>`<div class="combo-opt${i===st.active?' active':''}${o.toLowerCase()===cur?' selected':''}" data-i="${i}"><span>${o.replace(/</g,'&lt;')}</span>${o.toLowerCase()===cur?'<b>✓</b>':''}</div>`).join('')
     : `<div class="combo-empty">${q ? 'No match — press Enter to keep “'+st.input.value.replace(/</g,'&lt;')+'”' : st.emptyText}</div>`;
@@ -3016,7 +3095,11 @@ function renderComboMenu(filterText){
 function openComboMenu(input, getOptions, anchor, arrow, emptyText, showAll){
   ensureComboMenu();
   if(comboState && comboState.input !== input) closeComboMenu();
-  comboState = { input, getOptions, anchor, arrow, emptyText: emptyText || 'No options yet — type to add one', active: -1, items: [], filter: showAll ? '' : input.value };
+  const keepDirty = !!(comboState && comboState.input === input && comboState.dirty);
+  const multi = !!input._multi;
+  comboState = { input, getOptions, anchor, arrow, emptyText: emptyText || 'No options yet — type to add one', active: -1, items: [], filter: showAll ? '' : (multi ? lastMultiToken(input.value) : input.value),
+                 multi, groups: input._comboGroups || null, isCategory: multi && !input._comboGroups, dirty: keepDirty, openedAt: performance.now() };
+  if(multi){ if(arrow) arrow.classList.add('open'); comboState.active = 0; renderComboMenu(comboState.filter); return; }
   if(arrow) arrow.classList.add('open');
   const all = getOptions() || [];
   comboState.active = Math.max(0, all.findIndex(o=>o.toLowerCase()===(input.value||'').toLowerCase()));
@@ -3024,6 +3107,19 @@ function openComboMenu(input, getOptions, anchor, arrow, emptyText, showAll){
 }
 function pickComboOption(i){
   const st = comboState; if(!st || i<0 || i>=st.items.length) return;
+  if(st.multi){
+    // tick / untick — the list stays open so several can be chosen
+    const val = st.items[i], q = (st.filter || '').trim().toLowerCase();
+    let list = splitMulti(st.input.value);
+    if(q && list.length && list[list.length-1].toLowerCase() === q && !hasOpt(st.getOptions() || [], list[list.length-1])) list.pop();   // the half-typed search word
+    const at = list.findIndex(x => x.toLowerCase() === val.toLowerCase());
+    if(at > -1) list.splice(at, 1); else list.push(val);
+    st.input.value = joinMulti(list);
+    if(st.input._liveSet) st.input._liveSet(st.input.value);
+    st.dirty = true; st.filter = ''; st.active = i;
+    renderComboMenu('');
+    return;
+  }
   const input = st.input, val = st.items[i];
   closeComboMenu();
   input.value = val;
@@ -3058,6 +3154,12 @@ function makeCombo(input, getOptions, emptyText){
       comboState.active = (comboState.active + (e.key==='ArrowDown'?1:-1) + n) % n;
       renderComboMenu(comboState.filter);
     } else if(e.key === 'Enter'){
+      if(comboState.multi){
+        e.preventDefault(); e.stopImmediatePropagation();
+        if(comboState.filter && comboState.active > -1 && comboState.items.length) pickComboOption(comboState.active);
+        else { comboState.dirty = true; closeComboMenu(); }
+        return;
+      }
       if(comboState.active > -1 && comboState.items.length){ e.preventDefault(); e.stopImmediatePropagation(); pickComboOption(comboState.active); }
       else closeComboMenu();
     } else if(e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); closeComboMenu(); }
@@ -3071,7 +3173,7 @@ function makeCombo(input, getOptions, emptyText){
 const FIELD_WIDTHS = {
   "Product Name EN":230, "Product Name AR":230, "SKU":170, "Barcode / EAN / UPC":170, "Brand":160,
   "Main Category":200, "Subcategory":210, "Collection":200, "Description EN":320, "Description AR":320,
-  "Color":165, "Material":185, "Pieces Number":120, "Suitable For / Persons":130,
+  "Color":165, "Rim":130, "Material":185, "Pieces Number":120, "Suitable For / Persons":130,
   "Included Pieces":230, "Care Instructions":230, "Width":120, "Length":120, "Height":120, "Depth":120,
   "Diameter":120, "Capacity":130, "Regular Price":130, "Stock Status":165, "Assigned To":175,
   "Review Status":165, "Internal Notes":240
@@ -3388,35 +3490,84 @@ function seedColorList(){
 }
 seedColorList();
 const COMBO_TYPES = ["combo","combo-sub","combo-material","combo-category","combo-staff","combo-collection"];
+/* ---- A product can sit in SEVERAL categories and subcategories.
+   Saved as a readable list, e.g. "Tableware, Drinkware" — the FIRST one is the main
+   (primary) category, used for SKU-style wording, sorting and the product description. ---- */
+const MULTI_FIELDS = ["Main Category", "Subcategory"];
+function isMultiField(f){ return !!f && MULTI_FIELDS.includes(f.name); }
+function splitMulti(v){
+  const out = [];
+  String(v || "").split(",").map(x => x.trim()).filter(Boolean).forEach(x => { if(!out.some(y => y.toLowerCase() === x.toLowerCase())) out.push(x); });
+  return out;
+}
+function joinMulti(list){ return (list || []).join(", "); }
+function catsOf(row){ return row ? splitMulti(row.values[IDX["Main Category"]]) : []; }
+function subsOf(row){ return row ? splitMulti(row.values[IDX["Subcategory"]]) : []; }
+function primaryCat(row){ return catsOf(row)[0] || ""; }
+function catListFor(name){ const k = Object.keys(CATEGORY_SUBCATS).find(c => c.toLowerCase() === String(name).toLowerCase()); return k ? CATEGORY_SUBCATS[k] : null; }
+function matListFor(name){ const k = Object.keys(MATERIALS_BY_CATEGORY).find(c => c.toLowerCase() === String(name).toLowerCase()); return k ? MATERIALS_BY_CATEGORY[k] : null; }
+function needsMlUnit(row){ return catsOf(row).some(c => CAPACITY_ML_CATEGORIES.some(m => m.toLowerCase() === c.toLowerCase())); }
+/* Subcategory choices grouped under each chosen category (shown as headings in the dropdown) */
+function subGroupsFor(row){
+  const cats = catsOf(row);
+  return cats.map(c => ({ label: c, items: (catListFor(c) || []).slice() })).filter(g => g.items.length);
+}
+/* After the categories change: keep every subcategory / material that still fits one of
+   them (or that was typed by hand and belongs to no category); drop only the ones that
+   belonged to a category that was removed. Nothing is cleared needlessly. */
+function pruneAfterCategoryChange(row){
+  const cats = catsOf(row);
+  const si = IDX["Subcategory"], mi = IDX["Material"];
+  if(si > -1){
+    const allKnown = Object.values(CATEGORY_SUBCATS).flat().map(x => String(x).toLowerCase());
+    const fits = cats.flatMap(c => catListFor(c) || []).map(x => String(x).toLowerCase());
+    const keep = subsOf(row).filter(s => fits.includes(s.toLowerCase()) || !allKnown.includes(s.toLowerCase()));
+    row.values[si] = joinMulti(keep);
+  }
+  if(mi > -1){
+    const m = String(row.values[mi] || "").trim();
+    if(m){
+      const allKnown = Object.values(MATERIALS_BY_CATEGORY).flat().map(x => String(x).toLowerCase()).concat(MATERIALS_DEFAULT.map(x => x.toLowerCase()));
+      const fits = (cats.length ? cats.flatMap(c => matListFor(c) || MATERIALS_DEFAULT) : MATERIALS_DEFAULT).map(x => String(x).toLowerCase());
+      if(allKnown.includes(m.toLowerCase()) && !fits.includes(m.toLowerCase())) row.values[mi] = "";
+    }
+  }
+}
 function hasOpt(list, v){ return (list||[]).some(x => String(x).toLowerCase() === v.toLowerCase()); }
 function optionsFor(f, row){
-  const cat = row ? row.values[IDX["Main Category"]] : "";
+  const cats = catsOf(row);
+  const cat = cats[0] || "";
   let base = [];
   if(f.type === "combo") base = (f.options || []);
-  if(f.type === "combo-sub") base = CATEGORY_SUBCATS[cat] || [];
-  if(f.type === "combo-material") base = MATERIALS_BY_CATEGORY[cat] || MATERIALS_DEFAULT;
+  if(f.type === "combo-sub"){ base = []; cats.forEach(c => (catListFor(c) || []).forEach(v => { if(!hasOpt(base, v)) base.push(v); })); }
+  if(f.type === "combo-material"){
+    base = [];
+    (cats.length ? cats : [""]).forEach(c => (matListFor(c) || MATERIALS_DEFAULT).forEach(v => { if(!hasOpt(base, v)) base.push(v); }));
+  }
   if(f.type === "combo-category") base = dynamicCategories;
   if(f.type === "combo-staff") base = dynamicStaff;
-  if(f.type === "combo-collection") base = allCollections();
-  const extra = (f.type === "combo" || (f.type === "combo-material" && !MATERIALS_BY_CATEGORY[cat])) ? (customOptions[f.name] || []) : [];
+  if(f.type === "combo-collection"){ const rank = c => { const i = COLLECTIONS_V4.findIndex(x => x.toLowerCase() === String(c).toLowerCase()); return i < 0 ? 99 : i; }; base = dynamicCollections.slice().sort((a, b) => rank(a) - rank(b)); }
+  const extra = (f.type === "combo" || (f.type === "combo-material" && !cats.some(c => matListFor(c)))) ? (customOptions[f.name] || []) : [];
   const out = base.slice();
   extra.forEach(v => { if(!hasOpt(out, v)) out.push(v); });
   return out;
 }
 function learnOption(f, row, raw){
+  if(isMultiField(f)){ const parts = splitMulti(raw); if(parts.length > 1){ parts.forEach(p => learnOption(f, row, p)); return; } }
   const v = String(raw || "").trim();
   if(!v || !f || !COMBO_TYPES.includes(f.type)) return;
   if(hasOpt(optionsFor(f, row), v)) return;
-  const cat = (row.values[IDX["Main Category"]] || "").trim();
+  const cat = primaryCat(row);
   if(f.type === "combo-category"){ addCategoryIfNew(v); return; }
   if(f.type === "combo-staff"){ addStaffIfNew(v); return; }
   if(f.type === "combo-collection"){ addCollectionIfNew(v); return; }
   if(f.type === "combo-sub"){
     if(!cat) return;
-    CATEGORY_SUBCATS[cat] = CATEGORY_SUBCATS[cat] || [];
-    CATEGORY_SUBCATS[cat].push(v);
-  } else if(f.type === "combo-material" && cat && MATERIALS_BY_CATEGORY[cat]){
-    MATERIALS_BY_CATEGORY[cat].push(v);
+    const key = Object.keys(CATEGORY_SUBCATS).find(c => c.toLowerCase() === cat.toLowerCase()) || cat;
+    CATEGORY_SUBCATS[key] = CATEGORY_SUBCATS[key] || [];
+    CATEGORY_SUBCATS[key].push(v);
+  } else if(f.type === "combo-material" && cat && matListFor(cat)){
+    matListFor(cat).push(v);
   } else {
     (customOptions[f.name] = customOptions[f.name] || []).push(v);
   }
@@ -4101,18 +4252,18 @@ function buildRowTr(row, rIdx, dupeInfo){
       } else if(["combo","combo-sub","combo-material","combo-category","combo-staff","combo-collection"].includes(f.type)){
         let options = [];
         if(f.type === "combo") options = f.options;
-        if(f.type === "combo-sub") options = CATEGORY_SUBCATS[category] || [];
-        if(f.type === "combo-material") options = MATERIALS_BY_CATEGORY[category] || MATERIALS_DEFAULT;
-        if(f.type === "combo-category") options = dynamicCategories;
-        if(f.type === "combo-staff") options = dynamicStaff;
-        if(f.type === "combo-collection") options = allCollections();
-
         el = document.createElement('input');
         el.type = 'text'; el.className = 'cell combo'; el.autocomplete = 'off';
         el.placeholder = disabled ? "Not applicable" : (f.type==="combo-sub" && !category ? "Choose category first" : "Select or type…");
         el.value = row.values[cIdx] || "";
         el._comboOptions = () => optionsFor(f, row);
         el._comboEmpty = f.type==="combo-sub" && !category ? "Choose a main category first" : null;
+        if(isMultiField(f)){
+          el._multi = true; el.title = row.values[cIdx] || '';
+          el._liveSet = v => { row.values[cIdx] = v; liveSave(row); };
+          el.placeholder = disabled ? "Not applicable" : (f.type==="combo-sub" && !category ? "Choose category first" : "Select one or more…");
+          if(f.type === "combo-sub") el._comboGroups = () => subGroupsFor(row);
+        }
 
       } else if(MULTILINE_FIELDS[f.name]){
         el = document.createElement('textarea');
@@ -4153,7 +4304,9 @@ function buildRowTr(row, rIdx, dupeInfo){
       el.addEventListener('paste', e => handleGridPaste(e, rIdx, cIdx));
       el.addEventListener('change', e => {
         clearTimeout(liveSaveTimers[row.id]); delete liveSaveTimers[row.id]; delete liveSaveRows[row.id];
+        if(isMultiField(f)){ e.target.value = joinMulti(splitMulti(e.target.value)); e.target.title = e.target.value; }
         row.values[cIdx] = e.target.value;
+        if(f.name === "Main Category") pruneAfterCategoryChange(row);
         stampEdit(row);
         persistRow(row);
         if(preEditSnapshot){ pushUndo(preEditSnapshot, row.id); preEditSnapshot = null; }
@@ -4163,13 +4316,11 @@ function buildRowTr(row, rIdx, dupeInfo){
         learnOption(f, row, row.values[cIdx]);
         if(f.name === "Main Category"){
           addCategoryIfNew(row.values[cIdx]);
-          if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
-          if(IDX["Material"]>-1) row.values[IDX["Material"]] = "";
           // options are looked up when a dropdown opens, so the row can be patched in place;
           // only the capacity unit (ml) needs a redraw when it appears/disappears
           const capCell = vTrs.get(rIdx)?.children[IDX["Capacity"]+1];
           const hadMl = !!(capCell && capCell.querySelector('.unit-suffix'));
-          const needsMl = CAPACITY_ML_CATEGORIES.includes(row.values[cIdx]);
+          const needsMl = needsMlUnit(row);
           if(hadMl !== needsMl && capCell){ setCapacityUnit(capCell, needsMl); }
           if(!patchRowInPlace(row)) renderBody();
           else { const sub = vTrs.get(rIdx)?.children[IDX["Subcategory"]+1]?.querySelector('input.cell'); if(sub) sub.placeholder = row.values[cIdx] ? 'Select or type…' : 'Choose category first'; }
@@ -4186,7 +4337,7 @@ function buildRowTr(row, rIdx, dupeInfo){
       let cellContent = el;
 
       if(!disabled && f.type === "number" && (f.unit || f.dynamicUnit)){
-        const unitText = f.unit ? f.unit : (CAPACITY_ML_CATEGORIES.includes(category) ? "ml" : "");
+        const unitText = f.unit ? f.unit : (needsMlUnit(row) ? "ml" : "");
         if(unitText){
           const wrap = document.createElement('div'); wrap.className = 'unit-wrap';
           wrap.appendChild(el);
@@ -4521,8 +4672,8 @@ function buildFilterPass(){
     if(show && onlyIncomplete) show = rowMissingRequired(row);
     if(show && onlyDupes) show = rowHasDupe(row, dupeInfo);
     if(show && onlyInvalid) show = rowHasInvalid(row);
-    if(show && fCategory) show = row.values[IDX["Main Category"]] === fCategory;
-    if(show && fSubcategory) show = row.values[IDX["Subcategory"]] === fSubcategory;
+    if(show && fCategory) show = catsOf(row).some(c => c.toLowerCase() === fCategory.toLowerCase());
+    if(show && fSubcategory) show = subsOf(row).some(c => c.toLowerCase() === fSubcategory.toLowerCase());
     if(show && fCollection) show = (row.values[IDX["Collection"]]||"").trim().toLowerCase() === fCollection.toLowerCase();
     if(show && fBrand) show = (row.values[IDX["Brand"]]||"").toLowerCase().includes(fBrand);
     if(show && fStock) show = stockStatusOf(row) === fStock;
@@ -4656,8 +4807,15 @@ function updateBulkValueControl(){
   const wrap = document.getElementById('bulkValueWrap');
   wrap.innerHTML = '';
   let el;
-  if(field === "Main Category"){ el = document.createElement('select'); dynamicCategories.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
+  if(MULTI_FIELDS.includes(field)){
+    const mode = document.createElement('select'); mode.id = 'bulkMultiMode'; mode.title = 'Replace, add to, or remove from what each product already has';
+    [['replace','Replace with'],['add','Add'],['remove','Remove']].forEach(([v,t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; mode.appendChild(o); });
+    wrap.appendChild(mode);
+  }
+  if(field === "Subcategory"){ el = document.createElement('select'); const seen = []; Object.entries(CATEGORY_SUBCATS).forEach(([c, list]) => { const g = document.createElement('optgroup'); g.label = c; (list||[]).forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; g.appendChild(o); }); if(g.children.length) el.appendChild(g); }); }
+  else if(field === "Main Category"){ el = document.createElement('select'); dynamicCategories.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else if(field === "Color"){ el = document.createElement('select'); COLORS.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
+  else if(field === "Rim"){ el = document.createElement('select'); optionsFor(flatFields[IDX["Rim"]], null).forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else if(field === "Stock Status"){ el = document.createElement('select'); STOCK_STATUSES.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else if(field === "Review Status"){ el = document.createElement('select'); REVIEW_STATUSES.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; el.appendChild(o); }); }
   else { el = document.createElement('input'); el.type='text'; el.placeholder='Value…'; }
@@ -4672,14 +4830,18 @@ function applyBulkField(){
   const value = ctrl.value;
   if(!selectedRowIds.size) return;
   const idx = IDX[field];
-  mutateWithHistory(`Bulk updated ${selectedRowIds.size} product(s): ${field} → "${value}"`, ()=>{
+  const multi = MULTI_FIELDS.includes(field);
+  const modeEl = document.getElementById('bulkMultiMode');
+  const add = multi && modeEl && modeEl.value === 'add';
+  const remove = multi && modeEl && modeEl.value === 'remove';
+  const verb = add ? 'added' : remove ? 'removed' : '→';
+  mutateWithHistory(`Bulk updated ${selectedRowIds.size} product(s): ${field} ${verb} "${value}"`, ()=>{
     rows.forEach(r=>{
       if(selectedRowIds.has(r.id)){
-        r.values[idx] = value;
-        if(field === "Main Category"){
-          r.values[IDX["Subcategory"]] = "";
-          r.values[IDX["Material"]] = "";
-        }
+        if(add){ const l = splitMulti(r.values[idx]); splitMulti(value).forEach(v => { if(!l.some(x => x.toLowerCase() === v.toLowerCase())) l.push(v); }); r.values[idx] = joinMulti(l); }
+        else if(remove){ const rm = splitMulti(value).map(v => v.toLowerCase()); r.values[idx] = joinMulti(splitMulti(r.values[idx]).filter(x => !rm.includes(x.toLowerCase()))); }
+        else r.values[idx] = multi ? joinMulti(splitMulti(value)) : value;
+        if(field === "Main Category") pruneAfterCategoryChange(r);
         stampEdit(r);
       }
     });
@@ -5082,17 +5244,19 @@ function buildFocusedField(f, row, cIdx){
     const blank = document.createElement('option'); blank.value=''; blank.textContent='Select…'; el.appendChild(blank);
     f.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; if(row.values[cIdx]===opt) o.selected=true; el.appendChild(o); });
   } else if(['combo','combo-sub','combo-material','combo-category','combo-staff','combo-collection'].includes(f.type)){
-    let options = [];
-    if(f.type === 'combo') options = f.options;
-    if(f.type === 'combo-sub') options = CATEGORY_SUBCATS[category] || [];
-    if(f.type === 'combo-material') options = MATERIALS_BY_CATEGORY[category] || MATERIALS_DEFAULT;
-    if(f.type === 'combo-category') options = dynamicCategories;
-    if(f.type === 'combo-staff') options = dynamicStaff;
-    if(f.type === 'combo-collection') options = allCollections();
     el = document.createElement('input');
     el.type = 'text'; el.className = 'f-input'; el.autocomplete = 'off';
     el._comboOptions = () => optionsFor(f, row);
     el.placeholder = 'Select or type…';
+    if(isMultiField(f)){
+      el._multi = true;
+      el._liveSet = v => { row.values[cIdx] = v; liveSave(row); };
+      el.placeholder = f.type === 'combo-sub' && !category ? 'Choose a main category first' : 'Select one or more…';
+      if(f.type === 'combo-sub') el._comboGroups = () => subGroupsFor(row);
+      const hint = document.createElement('div'); hint.className = 'f-multi-hint';
+      hint.textContent = f.name === 'Main Category' ? 'You can choose more than one — the first is the main category.' : 'You can choose more than one — grouped by category.';
+      label.appendChild(hint);
+    }
     el.value = row.values[cIdx] || '';
   } else if(MULTILINE_FIELDS[f.name]){
     el = document.createElement('textarea');
@@ -5118,7 +5282,9 @@ function buildFocusedField(f, row, cIdx){
   el.addEventListener('input', e => { if(!e.isTrusted) return; row.values[cIdx] = e.target.value; liveSave(row); });
   el.addEventListener('change', e => {
     clearTimeout(liveSaveTimers[row.id]); delete liveSaveTimers[row.id]; delete liveSaveRows[row.id];
+    if(isMultiField(f)) e.target.value = joinMulti(splitMulti(e.target.value));
     row.values[cIdx] = e.target.value;
+    if(f.name === "Main Category") pruneAfterCategoryChange(row);
     stampEdit(row);
     persistRow(row);
     if(preEditSnapshot){ pushUndo(preEditSnapshot, row.id); preEditSnapshot=null; }
@@ -5128,8 +5294,6 @@ function buildFocusedField(f, row, cIdx){
     learnOption(f, row, row.values[cIdx]);
     if(f.name === "Main Category"){
       addCategoryIfNew(row.values[cIdx]);
-      if(IDX["Subcategory"]>-1) row.values[IDX["Subcategory"]] = "";
-      if(IDX["Material"]>-1) row.values[IDX["Material"]] = "";
       renderFocusedMode(); // full rebuild needed: Subcategory/Material options depend on category
     } else {
       // Lightweight refresh only — never recreates this step's input elements,
@@ -5147,7 +5311,7 @@ function buildFocusedField(f, row, cIdx){
   }
 
   if(!disabled && f.type==='number' && (f.unit || f.dynamicUnit)){
-    const unitText = f.unit ? f.unit : (CAPACITY_ML_CATEGORIES.includes(category) ? "ml" : "");
+    const unitText = f.unit ? f.unit : (needsMlUnit(row) ? "ml" : "");
     if(unitText){ const span = document.createElement('span'); span.className='f-unit'; span.textContent=unitText; wrap.appendChild(span); }
   }
   if(!disabled && f.rtl){
