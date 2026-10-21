@@ -786,7 +786,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.21.2</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.21.3</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -966,6 +966,7 @@
   <select id="bulkField" onchange="updateBulkValueControl()">
     <option value="Main Category">Main Category</option>
     <option value="Subcategory">Subcategory</option>
+    <option value="Sub-Subcategory">Sub-Subcategory</option>
     <option value="Brand">Brand</option>
     <option value="Material">Material</option>
     <option value="Color">Color</option>
@@ -1089,7 +1090,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.21.2';
+const APP_VERSION = '2026.10.21.3';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -1181,6 +1182,7 @@ const schema = [
   { section: "Classification", fields: [
     { name:"Main Category", type:"combo-category", required:true },
     { name:"Subcategory", type:"combo-sub" },
+    { name:"Sub-Subcategory", type:"combo-subsub" },
     { name:"Collection", type:"combo-collection" },
   ]},
   { section: "Product Details", fields: [
@@ -1221,7 +1223,7 @@ flatFields.forEach((f,i)=> IDX[f.name]=i);
 /* How values are SAVED (database, backups): the original order, with fields added later at
    the end. On screen, a field can sit anywhere (Rim shows right after Color) — values are
    converted at the save/load boundary only, so existing products never shift. */
-const FIELDS_ADDED_LATER = ["Rim"];
+const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory"];
 const STORE_FIELDS = flatFields.map(f => f.name).filter(n => !FIELDS_ADDED_LATER.includes(n)).concat(FIELDS_ADDED_LATER);
 const STORE_LEN = STORE_FIELDS.length;
 const D2S = flatFields.map(f => STORE_FIELDS.indexOf(f.name));     // screen position → saved position
@@ -1590,7 +1592,7 @@ function scheduleConfigSave(){
    at the same time both keep their additions. */
 let lastServerConfig = null, configDirty = false, configSaving = false;
 function localConfig(){
-  return JSON.parse(JSON.stringify({ catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY }));
+  return JSON.parse(JSON.stringify({ catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, skuCounter, categorySubcatsOverride: CATEGORY_SUBCATS, materialsOverride: MATERIALS_BY_CATEGORY, subSubcats: SUBSUBCATS }));
 }
 function mergeList(base, local, server){
   const low = x => String(x).toLowerCase();
@@ -1619,7 +1621,7 @@ function mergeConfig(base, local, server){
   base = base || {}; server = server || {};
   const out = Object.assign({}, server);
   ['dynamicCategories','dynamicStaff','dynamicCollections'].forEach(k => { out[k] = mergeList(base[k], local[k], server[k]); });
-  ['customOptions','categorySubcatsOverride','materialsOverride'].forEach(k => { out[k] = mergeMap(base[k], local[k], server[k]); });
+  ['customOptions','categorySubcatsOverride','materialsOverride','subSubcats'].forEach(k => { out[k] = mergeMap(base[k], local[k], server[k]); });
   out.skuCounter = Math.max(server.skuCounter || 0, local.skuCounter || 0);
   out.catalogVersion = Math.max(server.catalogVersion || 1, local.catalogVersion || 1);
   out.productOrder = HAS_SORT_COLUMN ? (server.productOrder || []) : local.productOrder;
@@ -1663,6 +1665,7 @@ async function persistConfig(){
 }
 function applyConfig(data){
   if(!data) return;
+  if(data.subSubcats && typeof data.subSubcats === 'object') SUBSUBCATS = JSON.parse(JSON.stringify(data.subSubcats));
   const savedVersion = data.catalogVersion||1;
   const needsCatalogUpgrade = savedVersion < CATALOG_VERSION;
   if(savedVersion < 2){
@@ -2739,7 +2742,8 @@ function doAutosave(){
       rows: rows.map(r=>({ id:r.id, sortOrder:(r.sortOrder===undefined?null:r.sortOrder), values:toStoreVals(r.values), createdAt:r.createdAt, createdBy:r.createdBy, lastEditedAt:r.lastEditedAt, lastEditedBy:r.lastEditedBy })),
       catalogVersion: CATALOG_VERSION, dynamicCategories, dynamicStaff, dynamicCollections, customOptions, productOrder, currentUser, skuCounter,
       categorySubcatsOverride: CATEGORY_SUBCATS,
-      materialsOverride: MATERIALS_BY_CATEGORY
+      materialsOverride: MATERIALS_BY_CATEGORY,
+      subSubcats: SUBSUBCATS
     };
     localStorage.setItem('cs_pde_state_v1', JSON.stringify(payload));
   }catch(e){ /* local backup best-effort only — Supabase is the real save */ }
@@ -2751,6 +2755,7 @@ function loadState(){
     const payload = JSON.parse(raw);
     if((payload.catalogVersion||1) < 2){ delete payload.categorySubcatsOverride; delete payload.materialsOverride; delete payload.dynamicCategories; }
     if(payload.categorySubcatsOverride) Object.assign(CATEGORY_SUBCATS, payload.categorySubcatsOverride);
+    if(payload.subSubcats && typeof payload.subSubcats === 'object') SUBSUBCATS = payload.subSubcats;
     if(payload.materialsOverride) Object.assign(MATERIALS_BY_CATEGORY, payload.materialsOverride);
     if(payload.dynamicCategories) dynamicCategories = payload.dynamicCategories;
     if(payload.dynamicStaff) dynamicStaff = payload.dynamicStaff;
@@ -3182,7 +3187,7 @@ function makeCombo(input, getOptions, emptyText){
    icon slot, and a sensible width for its kind of content. ---- */
 const FIELD_WIDTHS = {
   "Product Name EN":230, "Product Name AR":230, "SKU":170, "Barcode / EAN / UPC":170, "Brand":160,
-  "Main Category":200, "Subcategory":210, "Collection":200, "Description EN":320, "Description AR":320,
+  "Main Category":200, "Subcategory":210, "Sub-Subcategory":210, "Collection":200, "Description EN":320, "Description AR":320,
   "Color":165, "Rim":130, "Material":185, "Pieces Number":120, "Suitable For / Persons":130,
   "Included Pieces":230, "Care Instructions":230, "Width":120, "Length":120, "Height":120, "Depth":120,
   "Diameter":120, "Capacity":130, "Regular Price":130, "Stock Status":165, "Assigned To":175,
@@ -3499,11 +3504,33 @@ function seedColorList(){
   }
 }
 seedColorList();
-const COMBO_TYPES = ["combo","combo-sub","combo-material","combo-category","combo-staff","combo-collection"];
+const COMBO_TYPES = ["combo","combo-sub","combo-subsub","combo-material","combo-category","combo-staff","combo-collection"];
 /* ---- A product can sit in SEVERAL categories and subcategories.
    Saved as a readable list, e.g. "Tableware, Drinkware" — the FIRST one is the main
    (primary) category, used for SKU-style wording, sorting and the product description. ---- */
-const MULTI_FIELDS = ["Main Category", "Subcategory"];
+const MULTI_FIELDS = ["Main Category", "Subcategory", "Sub-Subcategory"];
+/* Third level: Sub-Subcategory options are kept per subcategory (e.g. Mugs → Espresso Mugs, Travel Mugs),
+   shared with everyone. Anything typed is remembered under the product's first subcategory. */
+let SUBSUBCATS = {};
+const GENERAL_SUBSUB = "";   // values typed when the product has no subcategory yet
+function subSubListFor(sub){ const k = Object.keys(SUBSUBCATS).find(c => c.toLowerCase() === String(sub).toLowerCase()); return k !== undefined ? SUBSUBCATS[k] : null; }
+function subSubGroupsFor(row){
+  const groups = splitMulti(row ? row.values[IDX["Subcategory"]] : "").map(sb => ({ label: sb, items: (subSubListFor(sb) || []).slice() })).filter(g => g.items.length);
+  const gen = SUBSUBCATS[GENERAL_SUBSUB] || [];
+  if(gen.length) groups.push({ label: 'General', items: gen.slice() });
+  return groups;
+}
+/* After the subcategories change: keep third-level values that still fit one of them, or that belong to none (typed by hand) */
+function pruneAfterSubChange(row){
+  const ti = IDX["Sub-Subcategory"]; if(ti === undefined || ti < 0) return false;
+  const before = row.values[ti] || "";
+  if(!before) return false;
+  const subs = splitMulti(row.values[IDX["Subcategory"]]);
+  const known = Object.entries(SUBSUBCATS).filter(([k]) => k !== GENERAL_SUBSUB).flatMap(([, l]) => l || []).map(x => String(x).toLowerCase());
+  const fits = subs.flatMap(sb => subSubListFor(sb) || []).concat(SUBSUBCATS[GENERAL_SUBSUB] || []).map(x => String(x).toLowerCase());
+  row.values[ti] = joinMulti(splitMulti(before).filter(v => fits.includes(v.toLowerCase()) || !known.includes(v.toLowerCase())));
+  return row.values[ti] !== before;
+}
 function isMultiField(f){ return !!f && MULTI_FIELDS.includes(f.name); }
 function splitMulti(v){
   const out = [];
@@ -3526,6 +3553,10 @@ function subGroupsFor(row){
    them (or that was typed by hand and belongs to no category); drop only the ones that
    belonged to a category that was removed. Nothing is cleared needlessly. */
 function pruneAfterCategoryChange(row){
+  _pruneCats(row);
+  pruneAfterSubChange(row);
+}
+function _pruneCats(row){
   const cats = catsOf(row);
   const si = IDX["Subcategory"], mi = IDX["Material"];
   if(si > -1){
@@ -3549,6 +3580,7 @@ function optionsFor(f, row){
   const cat = cats[0] || "";
   let base = [];
   if(f.type === "combo") base = (f.options || []);
+  if(f.type === "combo-subsub"){ base = []; subSubGroupsFor(row).forEach(g => g.items.forEach(v => { if(!hasOpt(base, v)) base.push(v); })); }
   if(f.type === "combo-sub"){ base = []; cats.forEach(c => (catListFor(c) || []).forEach(v => { if(!hasOpt(base, v)) base.push(v); })); }
   if(f.type === "combo-material"){
     base = [];
@@ -3571,6 +3603,15 @@ function learnOption(f, row, raw){
   if(f.type === "combo-category"){ addCategoryIfNew(v); return; }
   if(f.type === "combo-staff"){ addStaffIfNew(v); return; }
   if(f.type === "combo-collection"){ addCollectionIfNew(v); return; }
+  if(f.type === "combo-subsub"){
+    const sub = subsOf(row)[0] || GENERAL_SUBSUB;
+    const key = Object.keys(SUBSUBCATS).find(c => c.toLowerCase() === sub.toLowerCase());
+    const k = key !== undefined ? key : sub;
+    SUBSUBCATS[k] = SUBSUBCATS[k] || [];
+    SUBSUBCATS[k].push(v);
+    scheduleConfigSave();
+    return;
+  }
   if(f.type === "combo-sub"){
     if(!cat) return;
     const key = Object.keys(CATEGORY_SUBCATS).find(c => c.toLowerCase() === cat.toLowerCase()) || cat;
@@ -4259,7 +4300,7 @@ function buildRowTr(row, rIdx, dupeInfo){
         el.appendChild(blank);
         f.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; if(row.values[cIdx]===opt) o.selected=true; el.appendChild(o); });
 
-      } else if(["combo","combo-sub","combo-material","combo-category","combo-staff","combo-collection"].includes(f.type)){
+      } else if(COMBO_TYPES.includes(f.type)){
         let options = [];
         if(f.type === "combo") options = f.options;
         el = document.createElement('input');
@@ -4273,6 +4314,7 @@ function buildRowTr(row, rIdx, dupeInfo){
           el._liveSet = v => { row.values[cIdx] = v; liveSave(row); };
           el.placeholder = disabled ? "Not applicable" : (f.type==="combo-sub" && !category ? "Choose category first" : "Select one or more…");
           if(f.type === "combo-sub") el._comboGroups = () => subGroupsFor(row);
+          if(f.type === "combo-subsub"){ el._comboGroups = () => subSubGroupsFor(row); el._comboEmpty = "No options yet — type one and press Enter to add it"; }
         }
 
       } else if(MULTILINE_FIELDS[f.name]){
@@ -4317,9 +4359,11 @@ function buildRowTr(row, rIdx, dupeInfo){
         if(isMultiField(f)){ e.target.value = joinMulti(splitMulti(e.target.value)); e.target.title = e.target.value; }
         row.values[cIdx] = e.target.value;
         if(f.name === "Main Category") pruneAfterCategoryChange(row);
+        const subPruned = f.name === "Subcategory" && pruneAfterSubChange(row);
         stampEdit(row);
         persistRow(row);
         if(preEditSnapshot){ pushUndo(preEditSnapshot, row.id); preEditSnapshot = null; }
+        if(subPruned) patchRowInPlace(row);
         logActivity(`Row ${rIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
         updateUndoRedoButtons();
         scheduleAutosave();
@@ -4852,6 +4896,7 @@ function applyBulkField(){
         else if(remove){ const rm = splitMulti(value).map(v => v.toLowerCase()); r.values[idx] = joinMulti(splitMulti(r.values[idx]).filter(x => !rm.includes(x.toLowerCase()))); }
         else r.values[idx] = multi ? joinMulti(splitMulti(value)) : value;
         if(field === "Main Category") pruneAfterCategoryChange(r);
+        if(field === "Subcategory") pruneAfterSubChange(r);
         stampEdit(r);
       }
     });
@@ -5253,7 +5298,7 @@ function buildFocusedField(f, row, cIdx){
     el.className = 'f-input';
     const blank = document.createElement('option'); blank.value=''; blank.textContent='Select…'; el.appendChild(blank);
     f.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; if(row.values[cIdx]===opt) o.selected=true; el.appendChild(o); });
-  } else if(['combo','combo-sub','combo-material','combo-category','combo-staff','combo-collection'].includes(f.type)){
+  } else if(COMBO_TYPES.includes(f.type)){
     el = document.createElement('input');
     el.type = 'text'; el.className = 'f-input'; el.autocomplete = 'off';
     el._comboOptions = () => optionsFor(f, row);
@@ -5263,8 +5308,9 @@ function buildFocusedField(f, row, cIdx){
       el._liveSet = v => { row.values[cIdx] = v; liveSave(row); };
       el.placeholder = f.type === 'combo-sub' && !category ? 'Choose a main category first' : 'Select one or more…';
       if(f.type === 'combo-sub') el._comboGroups = () => subGroupsFor(row);
+      if(f.type === 'combo-subsub') el._comboGroups = () => subSubGroupsFor(row);
       const hint = document.createElement('div'); hint.className = 'f-multi-hint';
-      hint.textContent = f.name === 'Main Category' ? 'You can choose more than one — the first is the main category.' : 'You can choose more than one — grouped by category.';
+      hint.textContent = f.name === 'Main Category' ? 'You can choose more than one — the first is the main category.' : f.name === 'Sub-Subcategory' ? 'Third level — choose or type one or more, grouped by subcategory.' : 'You can choose more than one — grouped by category.';
       label.appendChild(hint);
     }
     el.value = row.values[cIdx] || '';
@@ -5295,9 +5341,11 @@ function buildFocusedField(f, row, cIdx){
     if(isMultiField(f)) e.target.value = joinMulti(splitMulti(e.target.value));
     row.values[cIdx] = e.target.value;
     if(f.name === "Main Category") pruneAfterCategoryChange(row);
+    const subPruned = f.name === "Subcategory" && pruneAfterSubChange(row);
     stampEdit(row);
     persistRow(row);
     if(preEditSnapshot){ pushUndo(preEditSnapshot, row.id); preEditSnapshot=null; }
+    if(subPruned) setTimeout(renderFocusedMode, 0);
     logActivity(`Row ${focusedRowIdx+1}: ${f.name} → "${e.target.value || '(empty)'}"`);
     updateUndoRedoButtons();
     scheduleAutosave();
