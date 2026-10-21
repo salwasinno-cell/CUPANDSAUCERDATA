@@ -786,7 +786,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.21.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.21.2</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1089,7 +1089,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.21.1';
+const APP_VERSION = '2026.10.21.2';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -1128,9 +1128,9 @@ if(SUPABASE_NOT_CONFIGURED){
 /* ========================================================================
    SCHEMA
    ======================================================================== */
-const CATALOG_VERSION = 5; // bump when the default catalog below changes, so saved configs pick it up once
+const CATALOG_VERSION = 6; // bump when the default catalog below changes, so saved configs pick it up once
 const CATEGORY_SUBCATS = {
-  "Tableware": ["Dinner Sets","Plates","Bowls","Flatware","Serveware","Dessert","Platters","Salad & Pasta","Condiments & Dips"],
+  "Tableware": ["Dinner Sets","Plates","Bowls","Flatware","Serveware","Dessert","Platters","Salad & Pasta","Condiments & Dips","Cutlery","Napkins","Napkin Rings"],
   "Drinkware": ["Coffee","Tea","Cups","Mugs","Containers","Pots","Carafes"],
   "Lighting": ["Table Lamps","Floor Lamps","Pendant Lights","Wall Lights","Candles","Candle Holders","Lanterns","String Lights"],
   "Trays": ["Serving Trays","Decorative Trays","Vanity Trays","Breakfast Trays","Ottoman Trays"],
@@ -1695,6 +1695,11 @@ function applyConfig(data){
     // v5: "Trays" is also a Kitchen Essentials subcategory (keeps every other staff edit)
     const k = Object.keys(CATEGORY_SUBCATS).find(c => c.toLowerCase() === 'kitchen essentials');
     if(k && !CATEGORY_SUBCATS[k].some(x => String(x).toLowerCase() === 'trays')) CATEGORY_SUBCATS[k].push('Trays');
+  }
+  if(savedVersion < 6){
+    // v6: Tableware gets Cutlery, Napkins and Napkin Rings (keeps every other staff edit)
+    const k = Object.keys(CATEGORY_SUBCATS).find(c => c.toLowerCase() === 'tableware');
+    if(k) ["Cutlery","Napkins","Napkin Rings"].forEach(v => { if(!CATEGORY_SUBCATS[k].some(x => String(x).toLowerCase() === v.toLowerCase())) CATEGORY_SUBCATS[k].push(v); });
   }
   if(data.customOptions && typeof data.customOptions === 'object') customOptions = data.customOptions;
   seedColorList();
