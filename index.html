@@ -786,7 +786,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.21.4</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.22.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -983,7 +983,7 @@
     <input type="text" inputmode="numeric" class="bulk-pos" placeholder="Move to #" aria-label="Move ticked products to position"
       onkeydown="if(event.key==='Enter'){event.preventDefault(); bulkMoveTo(this); this.blur();}">
   </span>
-  <button class="btn-ghost" onclick="bulkDuplicate()">Duplicate Selected</button>
+  <button class="btn-ghost" onclick="bulkDuplicate()" title="Duplicate the ticked products without their photos">Duplicate Selected</button>
   <div class="more-wrap export-wrap">
     <button class="btn-ghost" type="button" onclick="toggleExportMenu(event, 'bulkExportMenu')">⬇ Export Selected ▾</button>
     <div class="more-menu" id="bulkExportMenu" role="menu">
@@ -1090,7 +1090,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.21.4';
+const APP_VERSION = '2026.10.22.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -2092,9 +2092,9 @@ function openRowMenu(e, rIdx){
   m.innerHTML =
     item('<span class="mi">👁</span>Quick preview', `openPreview(${rIdx})`) +
     item('<span class="mi">⤢</span>Open in Focused Mode', `openFocusedMode(${rIdx})`) +
-    item('<span class="mi">⇧</span>Copy values from row above', `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
+    item('<span class="mi">⇧</span>Copy info from row above (no photo)', `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
     (isPlaced(row) ? item('<span class="mi">' + INSERT_ICON + '</span>Insert new product above', `insertRowAbove(${rIdx})`) + item('<span class="mi">' + INSERT_ICON + '</span>Insert new product below', `insertRowBelow(${rIdx})`) : '') +
-    item('<span class="mi">⧉</span>Duplicate product', `duplicateRow(${rIdx})`) +
+    item('<span class="mi">⧉</span>Duplicate without photo', `duplicateRow(${rIdx})`) +
     (started ? item('<span class="mi">' + COPY_ICON + '</span>Copy data (without photo)', `copyRowData(${rIdx})`) : '') +
     (copiedRowValues ? item('<span class="mi">' + PASTE_ICON + '</span>Paste copied data here', `pasteRowData(${rIdx})`) : '') +
     '<div class="more-sep"></div>' +
@@ -2445,7 +2445,9 @@ function copyFromRowAbove(idx){
   const above = rows[idx-1];
   mutateWithHistory(`Row ${idx+1}: copied values from row above`, ()=>{
     const target = rows[idx];
+    const ownPhoto = target.values[IDX["Product Image"]] || "";
     target.values = above.values.slice();
+    target.values[IDX["Product Image"]] = ownPhoto;        // the information only — never the photo
     target.values[IDX["SKU"]] = "";
     target.values[IDX["Barcode / EAN / UPC"]] = "";
     stampEdit(target);
@@ -2468,6 +2470,7 @@ function duplicateRow(idx){
   const src = rows[idx];
   mutateWithHistory(`Duplicated product #${idx+1}`, ()=>{
     const copy = { id: newId(), values: src.values.slice(), createdAt: Date.now(), createdBy: currentUser||'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser||'Unassigned' };
+    if(IDX["Product Image"]>-1) copy.values[IDX["Product Image"]] = "";   // the information only — add its own photo
     if(IDX["SKU"]>-1) copy.values[IDX["SKU"]] = "";
     if(IDX["Barcode / EAN / UPC"]>-1) copy.values[IDX["Barcode / EAN / UPC"]] = "";
     rows.splice(idx+1, 0, copy);
@@ -4224,8 +4227,8 @@ function buildRowTr(row, rIdx, dupeInfo){
       <span class="rowbtns">
         <button class="icon eye" title="Quick preview" onclick="openPreview(${rIdx})">👁</button>
         <button class="icon" title="Open Focused Mode" onclick="openFocusedMode(${rIdx})">⤢</button>
-        <button class="icon" title="Copy values from row above" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>⇧</button>
-        <button class="icon dup" title="Duplicate product" onclick="duplicateRow(${rIdx})">⧉</button>
+        <button class="icon" title="Copy the information from the row above (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>⇧</button>
+        <button class="icon dup" title="Duplicate this product without its photo (new SKU/Barcode to fill in)" onclick="duplicateRow(${rIdx})">⧉</button>
         <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
         ${isPlaced(row) ? `<button class="icon insrow" title="Insert a new product below this one" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>` : ``}
         ${rowStarted ? `<button class="icon copyrow" title="Copy this product's data (without photo)" onclick="copyRowData(${rIdx})">${COPY_ICON}</button>` : ``}
@@ -4502,7 +4505,7 @@ function buildCard(row, status, pct, rowStarted, sel, placed){
           <button class="icon insrow" title="Insert a new product below" onclick="insertRowBelow(ri(${id}))">${INSERT_ICON}</button>
         </div>` : ``}
         <div class="mcard-move">
-          <button class="icon dup" title="Duplicate product" onclick="duplicateRow(ri(${id}))">⧉</button>
+          <button class="icon dup" title="Duplicate this product without its photo (new SKU/Barcode to fill in)" onclick="duplicateRow(ri(${id}))">⧉</button>
           <button class="icon del" title="Delete row" onclick="deleteRow(ri(${id}))">✕</button>
         </div>
         ${(rowStarted || copiedRowValues) ? `<div class="mcard-move">
@@ -4926,12 +4929,15 @@ function bulkDuplicate(){
       if(srcIdx===-1) return;
       const src = rows[srcIdx];
       const copy = { id: newId(), values: src.values.slice(), createdAt: Date.now(), createdBy: currentUser||'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser||'Unassigned' };
+      copy.values[IDX["Product Image"]] = "";   // the information only — add its own photo
       copy.values[IDX["SKU"]] = "";
       copy.values[IDX["Barcode / EAN / UPC"]] = "";
       rows.splice(srcIdx+1, 0, copy);
     });
+    renumberOrder();
     selectedRowIds.clear();
   });
+  commitOrder();
   updateBulkBar();
 }
 function copySelectedAsCSV(){
