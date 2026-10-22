@@ -543,7 +543,10 @@
   @keyframes justMovedCard{0%,40%{box-shadow:0 0 0 2px var(--brass);}100%{}}
   /* copy / paste product data */
   .rowbtns-copy{margin-top:4px;min-height:0;}
-  .icon.copyrow, .icon.pasterow{color:var(--brass-dim);display:inline-flex;align-items:center;justify-content:center;}
+  .icon.copyrow, .icon.pasterow, .icon.rowabove{color:var(--brass-dim);display:inline-flex;align-items:center;justify-content:center;}
+  .mcard-actions .icon.rowabove svg{width:16px;height:16px;}
+  .icon.rowabove:disabled{opacity:.35;}
+  .mi svg{width:13px;height:13px;vertical-align:-2px;}
   .icon.pasterow{color:#2E7D5B;}
   .mcard-actions .icon.copyrow svg, .mcard-actions .icon.pasterow svg{width:15px;height:15px;}
   .app-toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#F4F1E8;padding:11px 18px;border-radius:8px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,0.25);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:600;max-width:calc(100vw - 32px);text-align:center;}
@@ -786,7 +789,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.22.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.22.2</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1090,7 +1093,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.22.1';
+const APP_VERSION = '2026.10.22.2';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -2092,7 +2095,7 @@ function openRowMenu(e, rIdx){
   m.innerHTML =
     item('<span class="mi">👁</span>Quick preview', `openPreview(${rIdx})`) +
     item('<span class="mi">⤢</span>Open in Focused Mode', `openFocusedMode(${rIdx})`) +
-    item('<span class="mi">⇧</span>Copy info from row above (no photo)', `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
+    item(`<span class="mi">${ROW_ABOVE_ICON}</span>Copy everything from row above (no photo)`, `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
     (isPlaced(row) ? item('<span class="mi">' + INSERT_ICON + '</span>Insert new product above', `insertRowAbove(${rIdx})`) + item('<span class="mi">' + INSERT_ICON + '</span>Insert new product below', `insertRowBelow(${rIdx})`) : '') +
     item('<span class="mi">⧉</span>Duplicate without photo', `duplicateRow(${rIdx})`) +
     (started ? item('<span class="mi">' + COPY_ICON + '</span>Copy data (without photo)', `copyRowData(${rIdx})`) : '') +
@@ -2440,18 +2443,19 @@ function deleteRow(idx){
   mutateWithHistory(`Deleted product #${idx+1}`, ()=>{ rows.splice(idx,1); });
   deleteProductImageByUrl(imgUrl);
 }
+/* One click: fill this product with everything from the product above it — except the photo
+   (and its own SKU / Barcode, which must stay unique). Undo (Ctrl+Z) puts it back. */
 function copyFromRowAbove(idx){
   if(idx===0) return;
   const above = rows[idx-1];
-  mutateWithHistory(`Row ${idx+1}: copied values from row above`, ()=>{
+  mutateWithHistory(`Row ${idx+1}: copied the information from row ${idx}`, ()=>{
     const target = rows[idx];
-    const ownPhoto = target.values[IDX["Product Image"]] || "";
+    const keep = ["Product Image", "SKU", "Barcode / EAN / UPC"].map(n => [IDX[n], target.values[IDX[n]] || ""]);
     target.values = above.values.slice();
-    target.values[IDX["Product Image"]] = ownPhoto;        // the information only — never the photo
-    target.values[IDX["SKU"]] = "";
-    target.values[IDX["Barcode / EAN / UPC"]] = "";
+    keep.forEach(([i, v]) => { if(i > -1) target.values[i] = v; });
     stampEdit(target);
   });
+  showToast(`#${idx+1} now has the information of #${idx} — photo, SKU and Barcode kept. Undo with Ctrl+Z`);
 }
 function fillDownColumn(fromRowIdx, cIdx){
   const value = rows[fromRowIdx].values[cIdx];
@@ -3640,6 +3644,7 @@ let copiedRowValues = null;
 const COPY_FIELD_IDX = flatFields.map((f,i)=>i).filter(i => flatFields[i].type !== "image");
 const NO_PASTE_FIELDS = ["SKU", "Barcode / EAN / UPC"];   // must stay unique per product
 const INSERT_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 12h12"/><path d="M8 5.5v5M5.5 8h5"/></svg>`;
+const ROW_ABOVE_ICON = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1.5" width="12" height="4" rx="1" fill="currentColor" fill-opacity=".25"/><rect x="2" y="10.5" width="12" height="4" rx="1"/><path d="M8 6.5v3.2M6.3 8.2 8 9.9l1.7-1.7"/></svg>`;
 const COPY_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>`;
 const PASTE_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="11.5" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M8 6v5M5.8 8.8 8 11l2.2-2.2"/></svg>`;
 
@@ -4227,7 +4232,7 @@ function buildRowTr(row, rIdx, dupeInfo){
       <span class="rowbtns">
         <button class="icon eye" title="Quick preview" onclick="openPreview(${rIdx})">👁</button>
         <button class="icon" title="Open Focused Mode" onclick="openFocusedMode(${rIdx})">⤢</button>
-        <button class="icon" title="Copy the information from the row above (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>⇧</button>
+        <button class="icon rowabove" title="Copy everything from the row above into this row (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>${ROW_ABOVE_ICON}</button>
         <button class="icon dup" title="Duplicate this product without its photo (new SKU/Barcode to fill in)" onclick="duplicateRow(${rIdx})">⧉</button>
         <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
         ${isPlaced(row) ? `<button class="icon insrow" title="Insert a new product below this one" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>` : ``}
@@ -4503,6 +4508,7 @@ function buildCard(row, status, pct, rowStarted, sel, placed){
           <button class="icon holdable" title="Move up (hold to keep moving)" data-hold="-1" data-hold-id="${id}" onclick="moveRowUp(ri(${id}))">↑</button>
           <button class="icon holdable" title="Move down (hold to keep moving)" data-hold="1" data-hold-id="${id}" onclick="moveRowDown(ri(${id}))">↓</button>
           <button class="icon insrow" title="Insert a new product below" onclick="insertRowBelow(ri(${id}))">${INSERT_ICON}</button>
+          <button class="icon rowabove" title="Copy everything from the product above (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(ri(${id}))" ${ri(id) === 0 ? 'disabled' : ''}>${ROW_ABOVE_ICON}</button>
         </div>` : ``}
         <div class="mcard-move">
           <button class="icon dup" title="Duplicate this product without its photo (new SKU/Barcode to fill in)" onclick="duplicateRow(ri(${id}))">⧉</button>
@@ -4540,7 +4546,7 @@ function renderBody(){
 
    {   // ---- phone card: reused when nothing on it changed, so moving/deleting is instant
     const sel = selectedRowIds.has(row.id), placed = isPlaced(row);
-    const sig = [row.values[IDX["Product Name EN"]], row.values[IDX["SKU"]], row.values[IDX["Main Category"]], row.values[IDX["Regular Price"]], row.values[IDX["Product Image"]], status, pct, sel, placed, rowStarted, !!copiedRowValues].join('\u0001');
+    const sig = [row.values[IDX["Product Name EN"]], row.values[IDX["SKU"]], row.values[IDX["Main Category"]], row.values[IDX["Regular Price"]], row.values[IDX["Product Image"]], status, pct, sel, placed, rowStarted, !!copiedRowValues, rows[0] === row].join('\u0001');
     let c = cardCache.get(row.id);
     if(!c || c.sig !== sig){ c = { el: buildCard(row, status, pct, rowStarted, sel, placed), sig }; cardCache.set(row.id, c); }
     const card = c.el;
