@@ -217,6 +217,9 @@
   .bulk-count{font-size:12.5px;color:var(--brass-light);font-weight:600;margin-right:6px;white-space:nowrap;}
   .bulk-bar select, .bulk-bar input[type=text]{font-family:inherit;font-size:12.5px;padding:7px 10px;border-radius:2px;border:1px solid #45464B;background:#111214;color:#EDEBE3;}
   .bulk-bar .spacer{flex:1;}
+  .sel-all-head{display:flex;align-items:center;justify-content:center;cursor:pointer;padding:2px 0;}
+  .sel-all-head input{width:15px;height:15px;cursor:pointer;accent-color:var(--brass);}
+  .sel-all-btn{padding:6px 12px;margin-right:10px;white-space:nowrap;}
   .bulk-bar .bulk-move{display:inline-flex;align-items:center;gap:6px;}
   .bulk-bar .bulk-pos{width:92px;}
   .holdable{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
@@ -789,7 +792,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.22.2</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.23.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -861,6 +864,7 @@
 </div>
 
 <div class="queue-bar">
+  <button class="btn-ghost sel-all-btn" id="selAllBtn" type="button" onclick="selectAllShown(!allShownSelected())" title="Tick every product shown (search and filters apply)">☐ Select all</button>
   <span class="queue-text" id="queueText">Queue: —</span>
   <button class="btn-ghost" style="padding:6px 12px;" onclick="goToNextIncomplete()">Next Incomplete Product →</button>
 </div>
@@ -966,6 +970,7 @@
 <!-- Bulk action bar -->
 <div class="bulk-bar" id="bulkBar">
   <span class="bulk-count" id="bulkCount">0 selected</span>
+  <button class="btn-ghost" type="button" id="bulkSelAll" onclick="selectAllShown(true)" title="Tick every product shown">Select all</button>
   <select id="bulkField" onchange="updateBulkValueControl()">
     <option value="Main Category">Main Category</option>
     <option value="Subcategory">Subcategory</option>
@@ -1093,7 +1098,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.22.2';
+const APP_VERSION = '2026.10.23.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -2795,7 +2800,7 @@ function buildHead(){
   });
   const fieldRow = document.createElement('tr');
   fieldRow.className = 'field';
-  fieldRow.innerHTML = `<th class="rowno-head"></th>`;
+  fieldRow.innerHTML = `<th class="rowno-head"><label class="sel-all-head" title="Select all products shown (Ctrl+click a box to untick)"><input type="checkbox" id="selAllHead" onchange="selectAllShown(this.checked)"></label></th>`;
   flatFields.forEach(f => {
     const th = document.createElement('th');
     if(f.type === 'image'){
@@ -4604,11 +4609,54 @@ function toggleRowSelect(id, checked){
   updateBulkBar();
 }
 function clearSelection(){ selectedRowIds.clear(); renderBody(); updateBulkBar(); }
+/* ---- Select all: ticks every product currently shown (search / filters / quick views apply).
+   Empty rows at the bottom are not included. ---- */
+function shownProductIds(){
+  const pass = buildFilterPass();
+  return rows.filter(r => isPlaced(r) && pass(r)).map(r => r.id);
+}
+function allShownSelected(){
+  const ids = shownProductIds();
+  return ids.length > 0 && ids.every(id => selectedRowIds.has(id));
+}
+function selectAllShown(on){
+  const ids = shownProductIds();
+  if(on) ids.forEach(id => selectedRowIds.add(id)); else ids.forEach(id => selectedRowIds.delete(id));
+  vTrs.forEach((tr, idx) => {
+    const r = rows[idx]; if(!r) return;
+    const sel = selectedRowIds.has(r.id);
+    tr.classList.toggle('selected-row', sel);
+    const cb = tr.querySelector('.row-select'); if(cb) cb.checked = sel;
+  });
+  document.querySelectorAll('#mobileCards .mcard').forEach(card => {
+    const r = rows[parseInt(card.dataset.rowIndex, 10)]; if(!r) return;
+    const sel = selectedRowIds.has(r.id);
+    card.classList.toggle('selected', sel);
+    const cb = card.querySelector('.mcard-select input'); if(cb) cb.checked = sel;
+  });
+  updateBulkBar();
+  if(on && ids.length) showToast(`${ids.length} product${ids.length === 1 ? '' : 's'} selected`);
+}
 function updateBulkBar(){
   const n = selectedRowIds.size;
   const bar = document.getElementById('bulkBar');
   if(n>0){ bar.classList.add('show'); document.getElementById('bulkCount').textContent = n + ' selected'; }
   else bar.classList.remove('show');
+  syncSelectAllControls();
+}
+let selAllSyncQueued = false;
+function scheduleSelAllSync(){ if(selAllSyncQueued) return; selAllSyncQueued = true; requestAnimationFrame(() => { selAllSyncQueued = false; syncSelectAllControls(); }); }
+function syncSelectAllControls(){
+  // keep the Select-all controls in step with what's ticked and what's shown
+  const ids = shownProductIds();
+  const cnt = ids.filter(id => selectedRowIds.has(id)).length;
+  const all = ids.length > 0 && cnt === ids.length;
+  const head = document.getElementById('selAllHead');
+  if(head){ head.checked = all; head.indeterminate = cnt > 0 && !all; }
+  const btn = document.getElementById('selAllBtn');
+  if(btn) btn.textContent = all ? '☑ Unselect all' : '☐ Select all';
+  const bs = document.getElementById('bulkSelAll');
+  if(bs) bs.style.display = all ? 'none' : '';
 }
 
 /* ---- Lightweight indicator refresh — updates status dots / highlight
@@ -4761,6 +4809,7 @@ function visibleIdxIfFiltered(){
   return out.length === rows.length ? null : out;
 }
 function applyFilters(forceRebuild){
+  scheduleSelAllSync();
   const pass = buildFilterPass();
   if(isPhoneView()){
     document.querySelectorAll('#mobileCards .mcard').forEach(card=>{
