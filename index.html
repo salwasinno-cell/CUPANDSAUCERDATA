@@ -793,7 +793,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.23.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.28.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -857,7 +857,7 @@
 </div>
 <div class="search-bar">
   <div class="filter-row">
-    <input class="search-box" id="searchBox" type="search" placeholder="Search by name, SKU, brand, category…" oninput="applyFilters()">
+    <input class="search-box" id="searchBox" type="search" placeholder="Search by name, SKU, brand, category, or row # (e.g. 55 or 40-60)…" title="Type a row number (55), a range (40-60), or #55 for that row only" oninput="applyFilters()">
     <label><input type="checkbox" id="onlyIncomplete" onchange="applyFilters()"> Missing required</label>
     <label><input type="checkbox" id="onlyDupes" onchange="applyFilters()"> Duplicates</label>
     <label><input type="checkbox" id="onlyInvalid" onchange="applyFilters()"> Invalid values</label>
@@ -1099,7 +1099,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.23.1';
+const APP_VERSION = '2026.10.28.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -4766,8 +4766,20 @@ function updateSubcategoryFilterOptions(){
 }
 document.getElementById('fCategory').addEventListener('change', ()=>{ updateSubcategoryFilterOptions(); applyFilters(); });
 
+/* Row-number search: "55" or "#55" finds product #55; "40-60" or "#40-60" finds #40 to #60.
+   A plain number also still finds products whose text contains it (SKU, barcode, price…);
+   starting with # searches row numbers only. */
+function parseRowQuery(q){
+  const m = String(q).trim().match(/^(#)?\s*(\d+)\s*(?:[-–to]+\s*#?\s*(\d+))?$/i);
+  if(!m) return null;
+  let a = parseInt(m[2], 10), b = m[3] !== undefined ? parseInt(m[3], 10) : a;
+  if(b < a){ const t = a; a = b; b = t; }
+  return { from: a, to: b, only: !!m[1] || m[3] !== undefined };
+}
 function buildFilterPass(){
   const q = (document.getElementById('searchBox').value || "").toLowerCase().trim();
+  const rowQ = q ? parseRowQuery(q) : null;
+  const posOf = rowQ ? new Map(rows.map((r, i) => [r, i + 1])) : null;
   const onlyIncomplete = document.getElementById('onlyIncomplete').checked;
   const onlyDupes = document.getElementById('onlyDupes').checked;
   const onlyInvalid = document.getElementById('onlyInvalid').checked;
@@ -4783,7 +4795,13 @@ function buildFilterPass(){
   const dupeInfo = getDupeSets();
   const pass = (row) => {
     let show = true;
-    if(q) show = row.values.join(" ").toLowerCase().includes(q);
+    if(q){
+      if(rowQ){
+        const n = posOf.get(row);
+        const inRange = n >= rowQ.from && n <= rowQ.to;
+        show = inRange || (!rowQ.only && row.values.join(" ").toLowerCase().includes(q));
+      } else show = row.values.join(" ").toLowerCase().includes(q);
+    }
     if(show && onlyIncomplete) show = rowMissingRequired(row);
     if(show && onlyDupes) show = rowHasDupe(row, dupeInfo);
     if(show && onlyInvalid) show = rowHasInvalid(row);
