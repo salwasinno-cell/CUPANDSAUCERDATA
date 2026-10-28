@@ -712,11 +712,22 @@
   .mcard-actions .icon.insrow svg{width:16px;height:16px;}
   /* phone: jump to top / bottom */
   .jump-btns{display:none;}
+  /* laptop: a small group at the right edge of the screen */
+  @media not all and (max-width:860px) and (hover:none) and (pointer:coarse){
+    .jump-btns{display:flex;flex-direction:column;gap:6px;position:fixed;right:4px;top:50%;transform:translateY(-50%);z-index:55;}
+    .jump-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.96);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 3px 10px rgba(0,0,0,0.14);cursor:pointer;transition:opacity .2s, transform .2s, border-color .15s;}
+    .jump-btn svg{width:15px;height:15px;}
+    .jump-btn:hover{border-color:var(--brass);color:var(--brass-dim);}
+    .jump-btn.off{opacity:0.3;pointer-events:none;}
+    .jump-btn.jump-50{flex-direction:column;gap:0;font:700 10px/1 Inter,system-ui,sans-serif;color:var(--brass-dim);}
+    .jump-btn.jump-50 svg{width:12px;height:12px;}
+  }
   @media (max-width:860px) and (hover:none) and (pointer:coarse){
     .jump-btns{display:flex;flex-direction:column;gap:10px;position:fixed;left:16px;bottom:calc(18px + env(safe-area-inset-bottom, 0px));z-index:60;}
     .jump-btn{width:44px;height:44px;border-radius:50%;border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.96);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 4px 14px rgba(0,0,0,0.18);cursor:pointer;transition:opacity .2s, transform .2s;}
     .jump-btn:active{background:var(--brass-light);}
     .jump-btn.off{opacity:0;pointer-events:none;transform:scale(0.85);}
+    .jump-btn.jump-50{flex-direction:column;gap:0;font:700 10.5px/1 Inter,system-ui,sans-serif;color:var(--brass-dim);}
     body.sheet-fullscreen .jump-btns{display:none;}
     #mobileCards{padding-bottom:130px;}
   }
@@ -793,7 +804,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.28.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.28.2</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -952,9 +963,11 @@
 <div class="mobile-cards" id="mobileCards"></div>
 <button class="mobile-fab" onclick="addRow()" title="Add Product">+</button>
 <div class="jump-btns" aria-label="Page navigation">
-  <button type="button" class="jump-btn" id="jumpTop" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Go to top" aria-label="Go to top">
+  <button type="button" class="jump-btn" id="jumpTop" onclick="jumpToEnd(-1)" title="Go to the first product" aria-label="Go to top">
     <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h10M8 13.5V6M4.5 9.5 8 6l3.5 3.5"/></svg></button>
-  <button type="button" class="jump-btn" id="jumpBottom" onclick="window.scrollTo({top:document.documentElement.scrollHeight, behavior:'smooth'})" title="Go to bottom" aria-label="Go to bottom">
+  <button type="button" class="jump-btn jump-50" id="jumpUp50" onclick="jumpBy(-50)" title="Go up 50 products" aria-label="Up 50 products"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 8 5.5l4 4"/></svg><span>50</span></button>
+  <button type="button" class="jump-btn jump-50" id="jumpDown50" onclick="jumpBy(50)" title="Go down 50 products" aria-label="Down 50 products"><span>50</span><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg></button>
+  <button type="button" class="jump-btn" id="jumpBottom" onclick="jumpToEnd(1)" title="Go to the last product" aria-label="Go to bottom">
     <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13.5h10M8 2.5V10M4.5 6.5 8 10l3.5-3.5"/></svg></button>
 </div>
 
@@ -1099,7 +1112,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.28.1';
+const APP_VERSION = '2026.10.28.2';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -3265,13 +3278,67 @@ function insertRowAt(index){
   });
 }
 function insertRowBelow(idx){ insertRowAt(idx + 1); }
+/* ---- Jump buttons: top / up 50 / down 50 / bottom — on the phone (page scroll) and on the
+   laptop table (its own scroll). Counted in the products you can see (search & filters apply). ---- */
+const JUMP_HEAD_GAP = 10;
+function phoneVisibleCards(){ return [...document.querySelectorAll('#mobileCards .mcard:not(.hidden-row)')]; }
+function currentTopPos(){
+  if(isPhoneView()){
+    const cards = phoneVisibleCards();
+    const i = cards.findIndex(c => c.getBoundingClientRect().bottom > JUMP_HEAD_GAP + 40);
+    return { pos: i < 0 ? cards.length - 1 : i, count: cards.length, cards };
+  }
+  const sc = tableScrollEl(), tbody = document.getElementById('tbody');
+  const theadH = (document.querySelector('#tableScroll thead') || {}).offsetHeight || 0;
+  const bodyTop = tbody.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+  const pos = Math.max(0, Math.round((sc.scrollTop + theadH - bodyTop) / vRowH));
+  return { pos: Math.min(pos, Math.max(0, vView.length - 1)), count: vView.length, sc, bodyTop, theadH };
+}
+function goToPos(t, pos){
+  markIntendedScroll();
+  if(isPhoneView()){
+    const c = t.cards[pos]; if(!c) return;
+    const land = () => { const d = c.getBoundingClientRect().top - JUMP_HEAD_GAP; if(Math.abs(d) > 1){ markIntendedScroll(); window.scrollBy(0, d); } };
+    // cards off screen are only estimated and get measured a few frames later — keep correcting until it settles
+    let frames = 0, still = 0;
+    const settle = () => { const d = c.getBoundingClientRect().top - JUMP_HEAD_GAP; if(Math.abs(d) > 1){ land(); still = 0; } else still++; if(still < 4 && ++frames < 30) requestAnimationFrame(settle); else updateJumpButtons(); };
+    land(); requestAnimationFrame(settle);
+    c.classList.add('just-moved'); setTimeout(() => c.classList.remove('just-moved'), 1000);
+  } else {
+    t.sc.scrollTop = Math.max(0, t.bodyTop + pos * vRowH - t.theadH);
+    vUpdate();
+  }
+  setTimeout(updateJumpButtons, 60);
+}
+function jumpBy(n){
+  const t = currentTopPos(); if(!t.count) return;
+  const pos = Math.max(0, Math.min(t.count - 1, t.pos + n));
+  goToPos(t, pos);
+  const label = isPhoneView() ? (+t.cards[pos].dataset.rowIndex + 1) : (vView[pos] + 1);
+  showToast(`Now at #${label}`);
+}
+function jumpToEnd(dir){
+  markIntendedScroll();
+  if(isPhoneView()) window.scrollTo({ top: dir < 0 ? 0 : document.documentElement.scrollHeight, behavior: 'smooth' });
+  else { const sc = tableScrollEl(); sc.scrollTop = dir < 0 ? 0 : sc.scrollHeight; vUpdate(); }
+  setTimeout(updateJumpButtons, 400);
+}
 function updateJumpButtons(){
   const top = document.getElementById('jumpTop'), bot = document.getElementById('jumpBottom');
+  const up = document.getElementById('jumpUp50'), dn = document.getElementById('jumpDown50');
   if(!top || !bot) return;
-  const y = window.scrollY, max = document.documentElement.scrollHeight - window.innerHeight;
-  top.classList.toggle('off', y < 120);
-  bot.classList.toggle('off', max - y < 120);
+  let atTop, atBottom;
+  if(isPhoneView()){
+    const y = window.scrollY, max = document.documentElement.scrollHeight - window.innerHeight;
+    atTop = y < 120; atBottom = max - y < 120;
+  } else {
+    const sc = tableScrollEl(); if(!sc) return;
+    atTop = sc.scrollTop < 40; atBottom = sc.scrollHeight - sc.clientHeight - sc.scrollTop < 40;
+  }
+  top.classList.toggle('off', atTop); if(up) up.classList.toggle('off', atTop);
+  bot.classList.toggle('off', atBottom); if(dn) dn.classList.toggle('off', atBottom);
 }
+document.addEventListener('scroll', e => { if(e.target && e.target.id === 'tableScroll') updateJumpButtons(); }, { capture:true, passive:true });
 window.addEventListener('scroll', updateJumpButtons, { passive:true });
 window.addEventListener('resize', updateJumpButtons);
 setTimeout(updateJumpButtons, 500);
