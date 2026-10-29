@@ -579,7 +579,11 @@
 
   /* section labels stay readable while scrolling sideways */
   thead tr.group th > span, thead tr.group th{white-space:nowrap;}
-  thead tr.group th .group-label{position:sticky;left:116px;display:inline-block;}
+  thead tr.group th .group-label{position:sticky;left:calc(var(--rowno-w, 82px) + var(--img-col-w, 110px) + 16px);display:inline-block;}
+  /* photo column pinned next to the row numbers */
+  #tbody td.td-img, #thead tr.field th.th-img{position:sticky;left:var(--rowno-w, 82px);box-shadow:inset -1px 0 0 var(--hairline-strong), 6px 0 8px -6px rgba(27,28,31,0.18);}
+  #tbody td.td-img{z-index:2;}
+  #thead tr.field th.th-img{z-index:4;background:var(--ivory-2);}
 
   /* filter panel controls match the sheet */
   .filter-field select, .filter-field input[type=text]{height:36px;padding:0 34px 0 11px;font-size:13px;border:1px solid var(--hairline-strong);border-radius:6px;background-color:var(--white);color:var(--ink);min-width:150px;-webkit-appearance:none;appearance:none;
@@ -804,7 +808,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.28.2</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.29.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1112,7 +1116,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.28.2';
+const APP_VERSION = '2026.10.29.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -2818,6 +2822,7 @@ function buildHead(){
   flatFields.forEach(f => {
     const th = document.createElement('th');
     if(f.type === 'image'){
+      th.classList.add('th-img');
       th.innerHTML = `<div class="th-image-head">
         <span>${f.name}${f.required ? '<span class="req">*</span>' : ''}</span>
         <button type="button" class="img-size-btn" title="Photo size" onclick="event.stopPropagation(); toggleImgSizeMenu();">${GEAR_ICON}</button>
@@ -4261,10 +4266,21 @@ function lockColumns(){
   table.style.width = widths.reduce((a,b)=>a+b, 0) + 'px';
   table.classList.add('cols-locked');
   colsLocked = true;
+  updateStickyOffsets();
 }
 /* The second header row sticks exactly under the first (no gap where rows could peek through). */
 let stickyGroupH = 0;
+/* The row-number column and the photo column stay put while the table scrolls sideways. */
+function updateStickyOffsets(){
+  const rn = document.querySelector('#thead tr.field th.rowno-head'), im = document.querySelector('#thead tr.field th.th-img');
+  if(!rn) return;
+  const root = document.documentElement.style;
+  const w = Math.round(rn.getBoundingClientRect().width), iw = im ? Math.round(im.getBoundingClientRect().width) : 0;
+  if(w) root.setProperty('--rowno-w', w + 'px');
+  if(iw) root.setProperty('--img-col-w', iw + 'px');
+}
 function fitStickyHeader(){
+  updateStickyOffsets();
   const g = document.querySelector('#thead tr.group th');
   if(!g) return;
   const h = Math.round(g.getBoundingClientRect().height);
