@@ -490,6 +490,10 @@
   .combo-opt.active{background:var(--brass-light);}
   .combo-opt.selected{font-weight:600;}
   .combo-opt b{color:var(--brass-dim);font-weight:600;}
+  .combo-opt .combo-label{flex:1;}
+  .combo-del{flex-shrink:0;width:20px;height:20px;border:none;background:transparent;color:var(--ink-soft);border-radius:50%;font-size:15px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;opacity:.55;margin-left:6px;}
+  .combo-del:hover{opacity:1;background:#F6DEDA;color:var(--danger);}
+  .toast-action{margin-left:12px;background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font:inherit;font-weight:700;border-radius:4px;padding:3px 10px;cursor:pointer;pointer-events:auto;}
   .combo-head{font-size:11px;color:var(--ink-soft);padding:6px 10px 7px;border-bottom:1px solid var(--hairline);margin-bottom:4px;display:flex;align-items:center;gap:8px;justify-content:space-between;white-space:nowrap;}
   .combo-head > span:first-child{white-space:nowrap;}
   .combo-head b{color:var(--brass-dim);}
@@ -808,7 +812,7 @@
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.29.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.30.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1116,7 +1120,7 @@
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.29.1';
+const APP_VERSION = '2026.10.30.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -3092,9 +3096,10 @@ function renderMultiMenu(st, q){
   const own = (st.getOptions() || []).filter(o => !listed.includes(o.toLowerCase()));
   const custom = chosen.filter(c => !listed.includes(c.toLowerCase()) && !own.some(o => o.toLowerCase() === c.toLowerCase()));
   const sections = [];
-  if(custom.length) sections.push({ label: 'Typed by hand', items: custom });
+  if(custom.length) sections.push({ label: 'Typed by hand', items: custom, removable: false });
   groups.forEach(g => sections.push(g));
   if(own.length && st.groups) sections.push({ label: 'Other', items: own });
+  st.itemGroups = [];
   const items = []; let html = `<div class="combo-head"><span>${st.isCategory ? 'Choose one or more · the first is the <b>main</b> category' : 'Choose one or more'}</span>${chosen.length ? `<span class="combo-count">${chosen.length} selected</span>` : ''}</div>`;
   sections.forEach(sec => {
     const vis = sec.items.filter(match);
@@ -3103,7 +3108,8 @@ function renderMultiMenu(st, q){
     vis.forEach(o => {
       const i = items.length; items.push(o);
       const on = isOn(o), main = st.isCategory && chosen.length > 1 && chosen[0].toLowerCase() === o.toLowerCase();
-      html += `<div class="combo-opt multi${i===st.active?' active':''}${on?' selected':''}" data-i="${i}"><span class="combo-check">${on ? '✓' : ''}</span><span class="combo-label">${esc(o)}</span>${main ? '<span class="combo-main">Main</span>' : ''}</div>`;
+      st.itemGroups[i] = sec.removable === false ? false : (sec.label || null);
+      html += `<div class="combo-opt multi${i===st.active?' active':''}${on?' selected':''}" data-i="${i}"><span class="combo-check">${on ? '✓' : ''}</span><span class="combo-label">${esc(o)}</span>${main ? '<span class="combo-main">Main</span>' : ''}${st.input._field && sec.removable !== false ? `<button type="button" class="combo-del" data-del="${i}" title="Remove this option from the list (for everyone)" aria-label="Remove option">×</button>` : ''}</div>`;
     });
   });
   if(!items.length) html += `<div class="combo-empty">${q ? 'No match — press Enter to add “' + esc(lastMultiToken(st.input.value)) + '”' : st.emptyText}</div>`;
@@ -3123,8 +3129,19 @@ function renderComboMenu(filterText){
     const done = comboMenuEl.querySelector('.combo-done'); if(done) done.addEventListener('click', () => closeComboMenu());
   } else
   comboMenuEl.innerHTML = list.length
-    ? list.map((o,i)=>`<div class="combo-opt${i===st.active?' active':''}${o.toLowerCase()===cur?' selected':''}" data-i="${i}"><span>${o.replace(/</g,'&lt;')}</span>${o.toLowerCase()===cur?'<b>✓</b>':''}</div>`).join('')
+    ? list.map((o,i)=>`<div class="combo-opt${i===st.active?' active':''}${o.toLowerCase()===cur?' selected':''}" data-i="${i}"><span class="combo-label">${o.replace(/</g,'&lt;')}</span>${o.toLowerCase()===cur?'<b>✓</b>':''}${st.input._field ? `<button type="button" class="combo-del" data-del="${i}" title="Remove this option from the list (for everyone)" aria-label="Remove option">×</button>` : ''}</div>`).join('')
     : `<div class="combo-empty">${q ? 'No match — press Enter to keep “'+st.input.value.replace(/</g,'&lt;')+'”' : st.emptyText}</div>`;
+  comboMenuEl.querySelectorAll('.combo-del').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation(); ev.preventDefault();
+      const i = parseInt(btn.dataset.del, 10), val = st.items[i], f = st.input._field;
+      if(!f || val === undefined) return;
+      const group = st.itemGroups && st.itemGroups[i] ? st.itemGroups[i] : null;
+      const undoFn = removeOption(f, st.input._row, val, group);
+      renderComboMenu(st.filter);
+      showToast(`Removed “${val}” from the ${f.name} list`, { label: 'Undo', fn: undoFn });
+    });
+  });
   comboMenuEl.querySelectorAll('.combo-opt').forEach(el=>{
     el.addEventListener('click', ()=> pickComboOption(parseInt(el.dataset.i,10)));
     el.addEventListener('mouseenter', ()=>{ st.active = parseInt(el.dataset.i,10); comboMenuEl.querySelectorAll('.combo-opt').forEach(x=>x.classList.toggle('active', x===el)); });
@@ -3660,16 +3677,54 @@ function _pruneCats(row){
   }
 }
 function hasOpt(list, v){ return (list||[]).some(x => String(x).toLowerCase() === v.toLowerCase()); }
+/* ---- Remove an option from a dropdown list (the small × next to it). Shared with everyone.
+   Products that already use that value keep it. A removed option doesn't come back by itself;
+   typing it again in a field brings it back. Undo is offered right after. ---- */
+function removedKey(f){ return '__removed__' + f.name; }
+function isRemovedOpt(f, v){ return hasOpt(customOptions[removedKey(f)] || [], String(v)); }
+function spliceCI(list, v){ if(!Array.isArray(list)) return false; const i = list.findIndex(x => String(x).toLowerCase() === String(v).toLowerCase()); if(i < 0) return false; list.splice(i, 1); return true; }
+function optionStoresSnapshot(){ return JSON.stringify({ customOptions, dynamicCategories, dynamicStaff, dynamicCollections, CATEGORY_SUBCATS, SUBSUBCATS, MATERIALS_BY_CATEGORY }); }
+function restoreOptionStores(snap){
+  const o = JSON.parse(snap);
+  customOptions = o.customOptions; dynamicCategories = o.dynamicCategories; dynamicStaff = o.dynamicStaff; dynamicCollections = o.dynamicCollections;
+  Object.keys(CATEGORY_SUBCATS).forEach(k => delete CATEGORY_SUBCATS[k]); Object.assign(CATEGORY_SUBCATS, o.CATEGORY_SUBCATS);
+  Object.keys(MATERIALS_BY_CATEGORY).forEach(k => delete MATERIALS_BY_CATEGORY[k]); Object.assign(MATERIALS_BY_CATEGORY, o.MATERIALS_BY_CATEGORY);
+  SUBSUBCATS = o.SUBSUBCATS;
+}
+function removeOption(f, row, v, group){
+  const snap = optionStoresSnapshot();
+  const cats = catsOf(row), subs = subsOf(row);
+  if(f.type === "combo") spliceCI(customOptions[f.name], v);
+  if(f.type === "combo-category") spliceCI(dynamicCategories, v);
+  if(f.type === "combo-staff") spliceCI(dynamicStaff, v);
+  if(f.type === "combo-collection") spliceCI(dynamicCollections, v);
+  if(f.type === "combo-sub") (group ? [group] : cats).forEach(c => spliceCI(catListFor(c), v));
+  if(f.type === "combo-subsub"){
+    if(group === 'General') spliceCI(SUBSUBCATS[GENERAL_SUBSUB], v);
+    else (group ? [group] : subs).forEach(sb => spliceCI(subSubListFor(sb), v));
+  }
+  if(f.type === "combo-material"){
+    cats.forEach(c => spliceCI(matListFor(c), v));
+    spliceCI(customOptions[f.name], v);
+  }
+  // remember it, so it isn't re-added automatically from products that still use it
+  const k = removedKey(f);
+  customOptions[k] = customOptions[k] || [];
+  if(!hasOpt(customOptions[k], v)) customOptions[k].push(v);
+  scheduleConfigSave();
+  if(typeof updateSubcategoryFilterOptions === 'function') try{ updateSubcategoryFilterOptions(); }catch(e){}
+  return () => { restoreOptionStores(snap); scheduleConfigSave(); if(comboState) renderComboMenu(comboState.filter); };
+}
 function optionsFor(f, row){
   const cats = catsOf(row);
   const cat = cats[0] || "";
   let base = [];
-  if(f.type === "combo") base = (f.options || []);
+  if(f.type === "combo") base = (f.options || []).filter(v => !isRemovedOpt(f, v));
   if(f.type === "combo-subsub"){ base = []; subSubGroupsFor(row).forEach(g => g.items.forEach(v => { if(!hasOpt(base, v)) base.push(v); })); }
   if(f.type === "combo-sub"){ base = []; cats.forEach(c => (catListFor(c) || []).forEach(v => { if(!hasOpt(base, v)) base.push(v); })); }
   if(f.type === "combo-material"){
     base = [];
-    (cats.length ? cats : [""]).forEach(c => (matListFor(c) || MATERIALS_DEFAULT).forEach(v => { if(!hasOpt(base, v)) base.push(v); }));
+    (cats.length ? cats : [""]).forEach(c => (matListFor(c) || MATERIALS_DEFAULT.filter(v => !isRemovedOpt(f, v))).forEach(v => { if(!hasOpt(base, v)) base.push(v); }));
   }
   if(f.type === "combo-category") base = dynamicCategories;
   if(f.type === "combo-staff") base = dynamicStaff;
@@ -3679,10 +3734,14 @@ function optionsFor(f, row){
   extra.forEach(v => { if(!hasOpt(out, v)) out.push(v); });
   return out;
 }
-function learnOption(f, row, raw){
-  if(isMultiField(f)){ const parts = splitMulti(raw); if(parts.length > 1){ parts.forEach(p => learnOption(f, row, p)); return; } }
+function learnOption(f, row, raw, implicit){
+  if(isMultiField(f)){ const parts = splitMulti(raw); if(parts.length > 1){ parts.forEach(p => learnOption(f, row, p, implicit)); return; } }
   const v = String(raw || "").trim();
   if(!v || !f || !COMBO_TYPES.includes(f.type)) return;
+  if(isRemovedOpt(f, v)){
+    if(implicit) return;                                   // removed on purpose — don't bring it back by itself
+    spliceCI(customOptions[removedKey(f)], v); scheduleConfigSave();   // typed again → it's wanted again
+  }
   if(hasOpt(optionsFor(f, row), v)) return;
   const cat = primaryCat(row);
   if(f.type === "combo-category"){ addCategoryIfNew(v); return; }
@@ -3710,7 +3769,7 @@ function learnOption(f, row, raw){
   scheduleConfigSave();
 }
 function learnRowOptions(row){
-  flatFields.forEach((f, i) => { if(COMBO_TYPES.includes(f.type)) learnOption(f, row, row.values[i]); });
+  flatFields.forEach((f, i) => { if(COMBO_TYPES.includes(f.type)) learnOption(f, row, row.values[i], true); });
 }
 
 /* =====================================================================
@@ -3726,11 +3785,17 @@ const ROW_ABOVE_ICON = `<svg viewBox="0 0 16 16" width="13" height="13" fill="no
 const COPY_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>`;
 const PASTE_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="11.5" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M8 6v5M5.8 8.8 8 11l2.2-2.2"/></svg>`;
 
-function showToast(msg){
+function showToast(msg, action){
   let t = document.getElementById('appToast');
   if(!t){ t = document.createElement('div'); t.id = 'appToast'; t.className = 'app-toast'; document.body.appendChild(t); }
   t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
+  if(action){
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-action'; b.textContent = action.label;
+    b.addEventListener('mousedown', e => e.preventDefault());
+    b.addEventListener('click', () => { t.classList.remove('show'); action.fn(); });
+    t.appendChild(b);
+  }
+  clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), action ? 6000 : 2200);
 }
 function writeClipboard(text){
   if(navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
@@ -4408,6 +4473,7 @@ function buildRowTr(row, rIdx, dupeInfo){
         el.placeholder = disabled ? "Not applicable" : (f.type==="combo-sub" && !category ? "Choose category first" : "Select or type…");
         el.value = row.values[cIdx] || "";
         el._comboOptions = () => optionsFor(f, row);
+        el._field = f; el._row = row;
         el._comboEmpty = f.type==="combo-sub" && !category ? "Choose a main category first" : null;
         if(isMultiField(f)){
           el._multi = true; el.title = row.values[cIdx] || '';
@@ -5468,6 +5534,7 @@ function buildFocusedField(f, row, cIdx){
     el = document.createElement('input');
     el.type = 'text'; el.className = 'f-input'; el.autocomplete = 'off';
     el._comboOptions = () => optionsFor(f, row);
+    el._field = f; el._row = row;
     el.placeholder = 'Select or type…';
     if(isMultiField(f)){
       el._multi = true;
