@@ -908,7 +908,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.4</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.5</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1216,7 +1216,7 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.11.11.4';
+const APP_VERSION = '2026.11.11.5';
 const OPTIONS_ARCHIVE_KEY = 'cs_pde_options_archive_v1';
 const PRIOR_DEVICE_LISTS = (function(){
   const out = [];
@@ -1340,6 +1340,7 @@ const schema = [
     { name:"Care Instructions", type:"text" },
   ]},
   { section: "Dimensions", fields: [
+    { name:"Item 1 Name", type:"text", extraItem:1 },
     { name:"Width", type:"number", unit:"cm", headerUnit:"cm" },
     { name:"Length", type:"number", unit:"cm", headerUnit:"cm" },
     { name:"Height", type:"number", unit:"cm", headerUnit:"cm" },
@@ -1380,7 +1381,7 @@ flatFields.forEach((f,i)=> IDX[f.name]=i);
 /* How values are SAVED (database, backups): the original order, with fields added later at
    the end. On screen, a field can sit anywhere (Rim shows right after Color) — values are
    converted at the save/load boundary only, so existing products never shift. */
-const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory", "Item 2 Name", "Item 2 Width", "Item 2 Length", "Item 2 Height", "Item 2 Depth", "Item 2 Diameter", "Item 2 Capacity", "Item 3 Name", "Item 3 Width", "Item 3 Length", "Item 3 Height", "Item 3 Depth", "Item 3 Diameter", "Item 3 Capacity"];
+const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory", "Item 2 Name", "Item 2 Width", "Item 2 Length", "Item 2 Height", "Item 2 Depth", "Item 2 Diameter", "Item 2 Capacity", "Item 3 Name", "Item 3 Width", "Item 3 Length", "Item 3 Height", "Item 3 Depth", "Item 3 Diameter", "Item 3 Capacity", "Item 1 Name"];
 const STORE_FIELDS = flatFields.map(f => f.name).filter(n => !FIELDS_ADDED_LATER.includes(n)).concat(FIELDS_ADDED_LATER);
 const STORE_LEN = STORE_FIELDS.length;
 const D2S = flatFields.map(f => STORE_FIELDS.indexOf(f.name));     // screen position → saved position
@@ -3384,13 +3385,13 @@ const FIELD_WIDTHS = {
   "Included Pieces":230, "Care Instructions":230, "Width":120, "Length":120, "Height":120, "Depth":120,
   "Diameter":120, "Capacity":130, "Regular Price":130, "Stock Status":165, "Assigned To":175,
   "Review Status":165, "Internal Notes":240,
-  "Item 2 Name":170, "Item 2 Width":125, "Item 2 Length":125, "Item 2 Height":125, "Item 2 Depth":125, "Item 2 Diameter":130, "Item 2 Capacity":135, "Item 3 Name":170, "Item 3 Width":125, "Item 3 Length":125, "Item 3 Height":125, "Item 3 Depth":125, "Item 3 Diameter":130, "Item 3 Capacity":135
+  "Item 1 Name":170, "Item 2 Name":170, "Item 2 Width":125, "Item 2 Length":125, "Item 2 Height":125, "Item 2 Depth":125, "Item 2 Diameter":130, "Item 2 Capacity":135, "Item 3 Name":170, "Item 3 Width":125, "Item 3 Length":125, "Item 3 Height":125, "Item 3 Depth":125, "Item 3 Diameter":130, "Item 3 Capacity":135
 };
 const FIELD_PLACEHOLDERS = {
   "Product Name EN":"Product name", "Product Name AR":"اسم المنتج", "SKU":"e.g. CS-0001",
   "Barcode / EAN / UPC":"EAN / UPC", "Brand":"Brand", "Description EN":"Describe the product…",
   "Description AR":"وصف المنتج…", "Included Pieces":"e.g. 6 plates, 6 bowls",
-  "Care Instructions":"e.g. Dishwasher safe", "Internal Notes":"Notes for the team", "Item 2 Name":"Optional, e.g. Saucer", "Item 3 Name":"Optional, e.g. Lid",
+  "Care Instructions":"e.g. Dishwasher safe", "Internal Notes":"Notes for the team", "Item 1 Name":"Optional, e.g. Small Mushroom", "Item 2 Name":"Optional, e.g. Saucer", "Item 3 Name":"Optional, e.g. Lid",
   "Regular Price":"0.00"
 };
 
