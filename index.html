@@ -848,6 +848,10 @@
 
   thead tr.field th{top:var(--group-h, 35px) !important;}
   .app-version{color:#8E8F94;}
+  .recovery-bar{top:auto;bottom:18px;background:#3A2F17;}
+  .recovery-bar button.ghost{background:transparent;color:#F1EFE8;border:1px solid rgba(255,255,255,.4);}
+  .rec-item{display:inline-flex;align-items:center;gap:6px;margin:0 14px 8px 0;font-size:12.5px;cursor:pointer;}
+  .rec-group{color:var(--ink-soft);font-size:11px;}
   .update-bar{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:650;display:flex;align-items:center;gap:14px;background:var(--charcoal);color:#F1EFE8;border:1px solid var(--brass-dim);border-radius:10px;padding:10px 12px 10px 16px;font-size:13px;box-shadow:0 14px 34px rgba(0,0,0,0.3);max-width:calc(100vw - 24px);}
   .update-bar button{background:var(--brass);color:var(--charcoal);border:none;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer;white-space:nowrap;}
   
@@ -900,7 +904,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.2</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1208,7 +1212,14 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.11.11.1';
+const APP_VERSION = '2026.11.11.2';
+const OPTIONS_ARCHIVE_KEY = 'cs_pde_options_archive_v1';
+const PRIOR_DEVICE_LISTS = (function(){
+  const out = [];
+  try{ const p = JSON.parse(localStorage.getItem('cs_pde_state_v1') || 'null'); if(p) out.push(p); }catch(e){}
+  try{ const a = JSON.parse(localStorage.getItem(OPTIONS_ARCHIVE_KEY) || 'null'); if(a) out.push(a); }catch(e){}
+  return out;
+})();
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -2018,6 +2029,7 @@ async function fetchAllData(){
   lastServerConfig = cfgRow && cfgRow.data ? JSON.parse(JSON.stringify(cfgRow.data)) : null;
   applyConfig(cfgRow && cfgRow.data);
   healOptionLists();
+  setTimeout(offerOptionRecovery, 1500);
 
   const activityRows = actRes && actRes.data;
   activityLog = (activityRows||[]).map(a => ({ time: new Date(a.at).getTime(), text: a.text, user: a.actor }));
@@ -2883,6 +2895,7 @@ function doAutosave(){
       subSubcats: SUBSUBCATS
     };
     localStorage.setItem('cs_pde_state_v1', JSON.stringify(payload));
+    saveOptionsArchive();
   }catch(e){ /* local backup best-effort only — Supabase is the real save */ }
 }
 function loadState(){
@@ -3826,6 +3839,97 @@ function removeOption(f, row, v, group){
   if(typeof updateSubcategoryFilterOptions === 'function') try{ updateSubcategoryFilterOptions(); }catch(e){}
   return () => { restoreOptionStores(snap); scheduleConfigSave(); if(comboState) renderComboMenu(comboState.filter); };
 }
+/* ---- Option recovery from this device ----
+   Every device keeps an add-only archive of every option it has seen. When the tool opens, anything
+   that this device remembers but the shared lists no longer have is offered back (you review it first). */
+function listsFromState(st){
+  // → { fieldName: { groupName: [values] } }   (group '' = no group)
+  const out = {};
+  const put = (field, group, list) => { if(!Array.isArray(list)) return; out[field] = out[field] || {}; const g = out[field][group] = out[field][group] || []; list.forEach(v => { v = String(v || '').trim(); if(v && !hasOpt(g, v)) g.push(v); }); };
+  if(!st) return out;
+  put('Main Category', '', st.dynamicCategories);
+  put('Assigned To', '', st.dynamicStaff);
+  put('Collection', '', st.dynamicCollections);
+  Object.entries(st.categorySubcatsOverride || {}).forEach(([c, l]) => put('Subcategory', c, l));
+  Object.entries(st.subSubcats || {}).forEach(([c, l]) => put('Sub-Subcategory', c, l));
+  Object.entries(st.materialsOverride || {}).forEach(([c, l]) => put('Material', c, l));
+  Object.entries(st.customOptions || {}).forEach(([k, l]) => { if(!k.startsWith('__removed__')) put(k, '', l); });
+  return out;
+}
+function currentListsState(){ return { dynamicCategories, dynamicStaff, dynamicCollections, categorySubcatsOverride: CATEGORY_SUBCATS, subSubcats: SUBSUBCATS, materialsOverride: MATERIALS_BY_CATEGORY, customOptions }; }
+function mergeListsInto(target, add){ Object.entries(add).forEach(([f, groups]) => Object.entries(groups).forEach(([g, l]) => { target[f] = target[f] || {}; const t = target[f][g] = target[f][g] || []; l.forEach(v => { if(!hasOpt(t, v)) t.push(v); }); })); return target; }
+function saveOptionsArchive(){
+  try{
+    let arch = {}; try{ arch = JSON.parse(localStorage.getItem(OPTIONS_ARCHIVE_KEY) || 'null') || {}; }catch(e){}
+    const lists = mergeListsInto(arch.lists || {}, listsFromState(currentListsState()));
+    localStorage.setItem(OPTIONS_ARCHIVE_KEY, JSON.stringify({ lists, savedAt: Date.now() }));
+  }catch(e){}
+}
+function findMissingOptions(){
+  const prior = {};
+  PRIOR_DEVICE_LISTS.forEach(p => mergeListsInto(prior, p.lists ? p.lists : listsFromState(p)));
+  const cur = listsFromState(currentListsState());
+  const missing = [];
+  Object.entries(prior).forEach(([field, groups]) => {
+    const f = flatFields[IDX[field]]; if(!f) return;
+    Object.entries(groups).forEach(([g, l]) => l.forEach(v => {
+      const curList = (cur[field] && cur[field][g]) || [];
+      if(hasOpt(curList, v) || isRemovedOpt(f, v)) return;
+      if(field !== 'Subcategory' && field !== 'Sub-Subcategory' && field !== 'Material' && Object.values(cur[field] || {}).some(x => hasOpt(x, v))) return;
+      missing.push({ field, group: g, value: v });
+    }));
+  });
+  return missing;
+}
+function restoreOptions(list){
+  list.forEach(({ field, group, value }) => {
+    const f = flatFields[IDX[field]]; if(!f) return;
+    const add = (arr) => { if(!hasOpt(arr, value)) arr.push(value); };
+    if(field === 'Main Category') add(dynamicCategories);
+    else if(field === 'Assigned To') add(dynamicStaff);
+    else if(field === 'Collection') add(dynamicCollections);
+    else if(field === 'Subcategory'){ const k = Object.keys(CATEGORY_SUBCATS).find(c => c.toLowerCase() === group.toLowerCase()) || group; CATEGORY_SUBCATS[k] = CATEGORY_SUBCATS[k] || []; add(CATEGORY_SUBCATS[k]); }
+    else if(field === 'Sub-Subcategory'){ const k = Object.keys(SUBSUBCATS).find(c => c.toLowerCase() === group.toLowerCase()); const key = k !== undefined ? k : group; SUBSUBCATS[key] = SUBSUBCATS[key] || []; add(SUBSUBCATS[key]); }
+    else if(field === 'Material' && group){ const k = Object.keys(MATERIALS_BY_CATEGORY).find(c => c.toLowerCase() === group.toLowerCase()) || group; MATERIALS_BY_CATEGORY[k] = MATERIALS_BY_CATEGORY[k] || []; add(MATERIALS_BY_CATEGORY[k]); }
+    else { customOptions[field] = customOptions[field] || []; add(customOptions[field]); }
+  });
+  scheduleConfigSave();
+  try{ logActivity(`Restored ${list.length} option${list.length === 1 ? '' : 's'} to the dropdown lists`); }catch(e){}
+}
+let missingOptions = [];
+function offerOptionRecovery(){
+  try{
+    missingOptions = findMissingOptions();
+    saveOptionsArchive();
+    if(!missingOptions.length) return;
+    try{ if(sessionStorage.getItem('cs_pde_recovery_dismissed') === String(missingOptions.length)) return; }catch(e){}
+    const bar = document.createElement('div'); bar.className = 'update-bar recovery-bar'; bar.id = 'recoveryBar';
+    bar.innerHTML = `<span><b>${missingOptions.length} dropdown option${missingOptions.length === 1 ? '' : 's'}</b> this device remembers ${missingOptions.length === 1 ? 'is' : 'are'} missing from the shared lists.</span><button type="button" onclick="openRecoveryDialog()">Review &amp; restore</button><button type="button" class="ghost" onclick="dismissRecovery()">Not now</button>`;
+    document.body.appendChild(bar);
+  }catch(e){ console.error('offerOptionRecovery', e); }
+}
+function dismissRecovery(){ try{ sessionStorage.setItem('cs_pde_recovery_dismissed', String(missingOptions.length)); }catch(e){} const b = document.getElementById('recoveryBar'); if(b) b.remove(); }
+function openRecoveryDialog(){
+  const esc = x => String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const byField = {};
+  missingOptions.forEach((m, i) => { (byField[m.field] = byField[m.field] || []).push([m, i]); });
+  const ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'recoveryOverlay'; ov.style.zIndex = '700';
+  ov.innerHTML = `<div class="modal-panel"><div class="modal-header"><h2>Restore missing options</h2><button type="button" onclick="document.getElementById('recoveryOverlay').remove()">✕</button></div>
+    <div class="modal-body"><p style="margin:0 0 14px;color:var(--ink-soft);font-size:12.5px;">These options were in the lists before and are missing now. Untick any you don't want back, then press Restore. Products are not changed.</p>
+    ${Object.entries(byField).map(([field, items]) => `<div class="manage-cat-card"><h3>${esc(field)} <span style="font-weight:400;color:var(--ink-soft);font-size:12px;">${items.length}</span></h3>
+      ${items.map(([m, i]) => `<label class="rec-item"><input type="checkbox" data-rec="${i}" checked> ${esc(m.value)}${m.group ? ` <span class="rec-group">in ${esc(m.group)}</span>` : ''}</label>`).join('')}</div>`).join('')}
+    </div><div class="modal-footer" style="justify-content:flex-end;"><button type="button" class="btn-ghost" style="color:var(--ink);border-color:var(--hairline-strong);" onclick="document.getElementById('recoveryOverlay').remove()">Cancel</button><button type="button" class="btn-brass" onclick="confirmRecovery()">Restore selected</button></div></div>`;
+  document.body.appendChild(ov);
+}
+function confirmRecovery(){
+  const picked = [...document.querySelectorAll('#recoveryOverlay [data-rec]')].filter(c => c.checked).map(c => missingOptions[+c.dataset.rec]);
+  if(picked.length) restoreOptions(picked);
+  const ov = document.getElementById('recoveryOverlay'); if(ov) ov.remove();
+  const b = document.getElementById('recoveryBar'); if(b) b.remove();
+  missingOptions = findMissingOptions();
+  showToast(`${picked.length} option${picked.length === 1 ? '' : 's'} restored for everyone`);
+}
+
 /* Self-healing lists: every value used on a product is in its dropdown (unless someone removed it
    on purpose with the ×). So if a shared list is ever overwritten — an old tab, a lost save — it
    rebuilds itself from the products the next time anyone opens the tool. */
