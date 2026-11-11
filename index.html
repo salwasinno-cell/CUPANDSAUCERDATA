@@ -614,6 +614,11 @@
 
   /* section labels stay readable while scrolling sideways */
   thead tr.group th > span, thead tr.group th{white-space:nowrap;}
+  table.xi-hide2 .xi2, table.xi-hide3 .xi3{display:none;}
+  .items-btn{margin-left:10px;width:20px;height:20px;border-radius:50%;border:1px solid var(--brass);background:transparent;color:var(--brass-light);font:700 14px/1 Inter,system-ui,sans-serif;cursor:pointer;padding:0;vertical-align:1px;display:inline-flex;align-items:center;justify-content:center;}
+  .items-btn:hover{background:var(--brass);color:#1B1C1F;}
+  #itemsLess{margin-left:6px;}
+  .items-note{margin-left:8px;font-size:10px;letter-spacing:normal;text-transform:none;color:#9C9D98;font-weight:500;}
   thead tr.group th .group-label{position:sticky;left:calc(var(--rowno-w, 82px) + var(--img-col-w, 110px) + 16px);display:inline-block;}
   /* photo column pinned next to the row numbers */
   #tbody td.td-img, #thead tr.field th.th-img{position:sticky;left:var(--rowno-w, 82px);box-shadow:inset -1px 0 0 var(--hairline-strong), 6px 0 8px -6px rgba(27,28,31,0.18);}
@@ -908,7 +913,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.5</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.6</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1216,7 +1221,7 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.11.11.5';
+const APP_VERSION = '2026.11.11.6';
 const OPTIONS_ARCHIVE_KEY = 'cs_pde_options_archive_v1';
 const PRIOR_DEVICE_LISTS = (function(){
   const out = [];
@@ -2954,6 +2959,10 @@ function buildHead(){
     const th = document.createElement('th');
     th.colSpan = g.fields.length;
     const lab = document.createElement('span'); lab.className = 'group-label'; lab.textContent = g.section;
+    if(g.fields.some(f => f.extraItem >= 2)){
+      th.id = 'dimGroupHead'; th.dataset.full = g.fields.length;
+      lab.insertAdjacentHTML('beforeend', `<button type="button" class="items-btn" id="itemsMore" onclick="changeItemCols(1)" title="Show the next item's dimensions">+</button><button type="button" class="items-btn" id="itemsLess" onclick="changeItemCols(-1)" title="Hide the last item's dimensions">−</button><span class="items-note" id="itemsNote"></span>`);
+    }
     th.appendChild(lab);
     groupRow.appendChild(th);
   });
@@ -2973,12 +2982,45 @@ function buildHead(){
       const unitHtml = f.headerUnit ? `<span class="th-unit">${f.headerUnit}</span>` : '';
       th.innerHTML = f.name + (f.required ? '<span class="req">*</span>' : '') + unitHtml;
     }
+    if(f.extraItem >= 2) th.classList.add('xi' + f.extraItem);
     fieldRow.appendChild(th);
   });
   thead.appendChild(groupRow);
   thead.appendChild(fieldRow);
 }
 buildHead();
+/* ---- Item 2 / Item 3 dimension columns: hidden until you press + next to DIMENSIONS ---- */
+const XI_IDX = flatFields.map((f, i) => f.extraItem >= 2 ? [i, f.extraItem] : null).filter(Boolean);
+let itemColsShown = 1;
+try{ itemColsShown = Math.min(3, Math.max(1, parseInt(localStorage.getItem('cs_pde_item_cols') || '1', 10) || 1)); }catch(e){}
+function markXiCells(tr){ XI_IDX.forEach(([i, n]) => { const td = tr.children[i + 1]; if(td) td.classList.add('xi' + n); }); return tr; }
+function itemColHidden(name){ const f = flatFields[IDX[name]]; return !!(f && f.extraItem >= 2 && f.extraItem > itemColsShown); }
+function applyItemCols(){
+  const table = document.querySelector('#tableScroll table');
+  if(table){ table.classList.toggle('xi-hide2', itemColsShown < 2); table.classList.toggle('xi-hide3', itemColsShown < 3); }
+  const g = document.getElementById('dimGroupHead');
+  if(g){
+    const hidden = flatFields.filter(f => f.extraItem >= 2 && f.extraItem > itemColsShown).length;
+    g.colSpan = parseInt(g.dataset.full, 10) - hidden;
+  }
+  const more = document.getElementById('itemsMore'), less = document.getElementById('itemsLess'), note = document.getElementById('itemsNote');
+  if(more){ more.style.display = itemColsShown < 3 ? '' : 'none'; more.title = `Show Item ${itemColsShown + 1} dimensions`; }
+  if(less) less.style.display = itemColsShown > 1 ? '' : 'none';
+  if(note) note.textContent = itemColsShown > 1 ? `Items 1–${itemColsShown}` : '';
+  if(typeof unlockColumns === 'function' && colsLocked){ unlockColumns(); requestAnimationFrame(() => { if(vTrs.size) lockColumns(); fitStickyHeader(); }); }
+}
+applyItemCols();
+function changeItemCols(d){
+  itemColsShown = Math.min(3, Math.max(1, itemColsShown + d));
+  try{ localStorage.setItem('cs_pde_item_cols', String(itemColsShown)); }catch(e){}
+  applyItemCols();
+  if(d > 0){
+    // bring the new columns into view
+    const first = flatFields.findIndex(f => f.extraItem === itemColsShown);
+    const th = document.querySelectorAll('#thead tr.field th')[first + 1], sc = tableScrollEl();
+    if(th && sc) requestAnimationFrame(() => { const r = th.getBoundingClientRect(), sr = sc.getBoundingClientRect(); if(r.left < sr.left || r.right > sr.right) sc.scrollLeft += r.left - sr.left - 280; });
+  }
+}
 
 /* ========================================================================
    KEYBOARD NAVIGATION (Arrow keys, Enter, Tab) + RANGE FILL
@@ -2987,6 +3029,7 @@ const NAV_COLUMNS = flatFields.filter(f => f.type !== "image").map(f => f.name);
 
 function focusCellAt(rIdx, colName){
   if(rIdx<0 || rIdx>=rows.length) return false;
+  if(itemColHidden(colName)) return false;
   if(vView.indexOf(rIdx) === -1) return false;            // filtered out
   const tr = ensureRowRendered(rIdx);
   if(!tr) return false;
@@ -3000,6 +3043,7 @@ function focusCellAt(rIdx, colName){
   return true;
 }
 function moveVertical(rIdx, colName, dir){
+  if(itemColHidden(colName)) return;
   let target = rIdx + dir;
   while(target>=0 && target<rows.length){
     if(focusCellAt(target, colName)) return;
@@ -4534,7 +4578,7 @@ function buildLiteTr(row, rIdx){
     else html += `<td><div class="lite-cell${f.rtl ? ' rtl-field' : ''}" style="width:${FIELD_WIDTHS[f.name] || 150}px">${escHtml(v)}</div></td>`;
   });
   tr.innerHTML = html;
-  return tr;
+  return markXiCells(tr);
 }
 let vRaf = 0;
 function vOnScroll(){ if(vRaf) return; vRaf = requestAnimationFrame(()=>{ vRaf = 0; vUpdate(); }); }
@@ -4572,7 +4616,7 @@ function getRowTr(rIdx){ return vTrs.get(rIdx) || null; }
 var colsLocked = false;
 function lockColumns(){
   const table = document.querySelector('#tableScroll table');
-  const ths = document.querySelectorAll('#thead tr.field th');
+  const ths = Array.from(document.querySelectorAll('#thead tr.field th')).filter(th => th.offsetParent !== null || getComputedStyle(th).display !== 'none');
   if(!table || !ths.length || !vTrs.size) return;
   const widths = Array.from(ths, th => Math.ceil(th.getBoundingClientRect().width));
   if(widths.some(w => !w)) return;
@@ -4872,7 +4916,7 @@ function buildRowTr(row, rIdx, dupeInfo){
 
       tr.appendChild(td);
     });
-    return tr;
+    return markXiCells(tr);
 }
 /* ---- Phone cards ---- */
 const cardCache = new Map();          // row id -> { el, sig }
