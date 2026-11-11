@@ -908,7 +908,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.3</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.4</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1216,7 +1216,7 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.11.11.3';
+const APP_VERSION = '2026.11.11.4';
 const OPTIONS_ARCHIVE_KEY = 'cs_pde_options_archive_v1';
 const PRIOR_DEVICE_LISTS = (function(){
   const out = [];
@@ -4445,6 +4445,8 @@ function vRenderAll(){
 function vUpdate(){
   if(isPhoneView() || !vView) return;
   if(vBusy){ vAgain = true; return; }
+  // a product was deleted (e.g. on another device) and the list hasn't been redrawn yet → redraw first
+  if(vView.length && vView[vView.length - 1] >= rows.length){ renderBody(); return; }
   vBusy = true;
   try{
     const tbody = document.getElementById('tbody');
