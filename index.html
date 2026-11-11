@@ -513,6 +513,10 @@
   .combo-main{font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--brass-dim);border:1px solid var(--brass);border-radius:10px;padding:1px 7px;}
   .combo-foot{position:sticky;bottom:-5px;background:var(--white);border-top:1px solid var(--hairline);margin-top:4px;padding:6px 6px 4px;display:flex;justify-content:flex-end;}
   .combo-done{font-family:inherit;font-size:12px;font-weight:600;background:var(--charcoal);color:#fff;border:none;border-radius:5px;padding:6px 16px;cursor:pointer;}
+  .f-item-head{grid-column:1 / -1;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--brass-dim);padding:14px 0 2px;border-bottom:1px solid var(--hairline);margin-bottom:2px;}
+  .f-item-head span{font-weight:400;text-transform:none;letter-spacing:normal;color:var(--ink-soft);margin-left:8px;}
+  .f-add-item{grid-column:1 / -1;justify-self:start;margin-top:14px;background:transparent;border:1px dashed var(--brass);color:var(--brass-dim);font:inherit;font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:6px;cursor:pointer;}
+  .f-add-item:hover{background:var(--brass-light);}
   .f-multi-hint{font-size:10.5px;font-weight:400;letter-spacing:normal;text-transform:none;color:var(--ink-soft);margin-top:3px;}
   .combo-empty{padding:10px 12px;color:var(--ink-soft);font-size:12px;}
 
@@ -904,7 +908,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.2</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.3</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1212,7 +1216,7 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.11.11.2';
+const APP_VERSION = '2026.11.11.3';
 const OPTIONS_ARCHIVE_KEY = 'cs_pde_options_archive_v1';
 const PRIOR_DEVICE_LISTS = (function(){
   const out = [];
@@ -1342,6 +1346,20 @@ const schema = [
     { name:"Depth", type:"number", unit:"cm", headerUnit:"cm" },
     { name:"Diameter", type:"number", unit:"cm", headerUnit:"cm" },
     { name:"Capacity", type:"number", dynamicUnit:true, headerUnit:"ml" },
+    { name:"Item 2 Name", type:"text", extraItem:2 },
+    { name:"Item 2 Width", type:"number", unit:"cm", headerUnit:"cm", extraItem:2 },
+    { name:"Item 2 Length", type:"number", unit:"cm", headerUnit:"cm", extraItem:2 },
+    { name:"Item 2 Height", type:"number", unit:"cm", headerUnit:"cm", extraItem:2 },
+    { name:"Item 2 Depth", type:"number", unit:"cm", headerUnit:"cm", extraItem:2 },
+    { name:"Item 2 Diameter", type:"number", unit:"cm", headerUnit:"cm", extraItem:2 },
+    { name:"Item 2 Capacity", type:"number", dynamicUnit:true, headerUnit:"ml", extraItem:2 },
+    { name:"Item 3 Name", type:"text", extraItem:3 },
+    { name:"Item 3 Width", type:"number", unit:"cm", headerUnit:"cm", extraItem:3 },
+    { name:"Item 3 Length", type:"number", unit:"cm", headerUnit:"cm", extraItem:3 },
+    { name:"Item 3 Height", type:"number", unit:"cm", headerUnit:"cm", extraItem:3 },
+    { name:"Item 3 Depth", type:"number", unit:"cm", headerUnit:"cm", extraItem:3 },
+    { name:"Item 3 Diameter", type:"number", unit:"cm", headerUnit:"cm", extraItem:3 },
+    { name:"Item 3 Capacity", type:"number", dynamicUnit:true, headerUnit:"ml", extraItem:3 },
   ]},
   { section: "Pricing", fields: [
     { name:"Regular Price", type:"number", required:true, min:0.01, headerUnit:"$" },
@@ -1362,14 +1380,14 @@ flatFields.forEach((f,i)=> IDX[f.name]=i);
 /* How values are SAVED (database, backups): the original order, with fields added later at
    the end. On screen, a field can sit anywhere (Rim shows right after Color) — values are
    converted at the save/load boundary only, so existing products never shift. */
-const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory"];
+const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory", "Item 2 Name", "Item 2 Width", "Item 2 Length", "Item 2 Height", "Item 2 Depth", "Item 2 Diameter", "Item 2 Capacity", "Item 3 Name", "Item 3 Width", "Item 3 Length", "Item 3 Height", "Item 3 Depth", "Item 3 Diameter", "Item 3 Capacity"];
 const STORE_FIELDS = flatFields.map(f => f.name).filter(n => !FIELDS_ADDED_LATER.includes(n)).concat(FIELDS_ADDED_LATER);
 const STORE_LEN = STORE_FIELDS.length;
 const D2S = flatFields.map(f => STORE_FIELDS.indexOf(f.name));     // screen position → saved position
 const S2D = STORE_FIELDS.map(n => IDX[n]);                          // saved position → screen position
 function toStoreVals(disp){ return S2D.map(d => (disp[d] === undefined || disp[d] === null) ? "" : disp[d]); }
-document.getElementById('fieldCountTop').textContent = flatFields.length;
-document.getElementById('statFields').textContent = flatFields.length;
+document.getElementById('fieldCountTop').textContent = flatFields.filter(f => !f.extraItem).length;
+document.getElementById('statFields').textContent = flatFields.filter(f => !f.extraItem).length;
 
 /* ========================================================================
    STATE
@@ -2697,9 +2715,11 @@ function rowHasImage(row){
 function rowHasAnyValue(row){
   return row.values.some(v => v && v.toString().trim() !== "");
 }
+/* Items 2 and 3 (extra pieces of a set) are optional: they never lower a product's completion. */
+const CORE_IDX = flatFields.map((f, i) => f.extraItem ? -1 : i).filter(i => i > -1);
 function rowCompletionPct(row){
-  const filled = row.values.filter(v => v && v.toString().trim() !== "").length;
-  return Math.round((filled / flatFields.length) * 100);
+  const filled = CORE_IDX.filter(i => { const v = row.values[i]; return v && v.toString().trim() !== ""; }).length;
+  return Math.round((filled / CORE_IDX.length) * 100);
 }
 function computeStatus(row){
   if(rowMissingRequired(row) || rowHasInvalid(row)) return 'Incomplete';
@@ -3363,13 +3383,14 @@ const FIELD_WIDTHS = {
   "Color":165, "Rim":130, "Material":185, "Pieces Number":120, "Suitable For / Persons":130,
   "Included Pieces":230, "Care Instructions":230, "Width":120, "Length":120, "Height":120, "Depth":120,
   "Diameter":120, "Capacity":130, "Regular Price":130, "Stock Status":165, "Assigned To":175,
-  "Review Status":165, "Internal Notes":240
+  "Review Status":165, "Internal Notes":240,
+  "Item 2 Name":170, "Item 2 Width":125, "Item 2 Length":125, "Item 2 Height":125, "Item 2 Depth":125, "Item 2 Diameter":130, "Item 2 Capacity":135, "Item 3 Name":170, "Item 3 Width":125, "Item 3 Length":125, "Item 3 Height":125, "Item 3 Depth":125, "Item 3 Diameter":130, "Item 3 Capacity":135
 };
 const FIELD_PLACEHOLDERS = {
   "Product Name EN":"Product name", "Product Name AR":"اسم المنتج", "SKU":"e.g. CS-0001",
   "Barcode / EAN / UPC":"EAN / UPC", "Brand":"Brand", "Description EN":"Describe the product…",
   "Description AR":"وصف المنتج…", "Included Pieces":"e.g. 6 plates, 6 bowls",
-  "Care Instructions":"e.g. Dishwasher safe", "Internal Notes":"Notes for the team",
+  "Care Instructions":"e.g. Dishwasher safe", "Internal Notes":"Notes for the team", "Item 2 Name":"Optional, e.g. Saucer", "Item 3 Name":"Optional, e.g. Lid",
   "Regular Price":"0.00"
 };
 
@@ -5105,8 +5126,8 @@ function updateStats(){
   const dupeInfo = getDupeSets();
   const P = rows.filter(rowHasAnyValue);   // empty rows aren't products
   document.getElementById('statRows').textContent = P.length;
-  const total = P.length * flatFields.length;
-  const filled = P.reduce((acc, row) => acc + row.values.filter(v => v && v.toString().trim() !== "").length, 0);
+  const total = P.length * CORE_IDX.length;
+  const filled = P.reduce((acc, row) => acc + CORE_IDX.filter(i => { const v = row.values[i]; return v && v.toString().trim() !== ""; }).length, 0);
   document.getElementById('statFilled').textContent = total ? Math.round((filled/total)*100) + "%" : "0%";
   document.getElementById('statIncomplete').textContent = P.filter(rowMissingRequired).length;
   document.getElementById('statDupes').textContent = P.filter(r=>rowHasDupe(r, dupeInfo)).length;
@@ -5728,14 +5749,35 @@ function stepHasMissing(row, sectionName){
   });
 }
 
+const focusedItemsOpen = {};   // product id → highest extra item opened in the form (2 or 3)
+function itemHasValues(row, n){ return flatFields.some((f, i) => f.extraItem === n && String(row.values[i] || '').trim() !== ''); }
+function openFocusedItem(n){ const row = rows[focusedRowIdx]; if(!row) return; focusedItemsOpen[row.id] = Math.max(focusedItemsOpen[row.id] || 1, n); renderFocusedMode(); }
 function renderFocusedFieldsForSection(content, row, sectionName, includeImage){
   const group = schema.find(g=>g.section===sectionName);
   if(!group) return;
+  const hasExtras = group.fields.some(f => f.extraItem);
+  const opened = Math.max(focusedItemsOpen[row.id] || 1, itemHasValues(row, 3) ? 3 : itemHasValues(row, 2) ? 2 : 1);
+  const heading = (txt, sub) => { const h = document.createElement('div'); h.className = 'f-item-head'; h.innerHTML = `${txt}${sub ? `<span>${sub}</span>` : ''}`; content.appendChild(h); };
+  if(hasExtras) heading('Item 1', 'the main piece');
+  let shownItem = 1;
   group.fields.forEach(f=>{
     const cIdx = IDX[f.name];
     if(f.type === 'image'){
       if(includeImage) content.appendChild(buildFocusedImageField(f, row, cIdx));
       return;
+    }
+    if(f.extraItem){
+      if(f.extraItem > opened){
+        if(f.extraItem === opened + 1 && shownItem !== f.extraItem){
+          shownItem = f.extraItem;
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'f-add-item';
+          b.textContent = `+ Add Item ${f.extraItem} dimensions (optional — only if the set has more than one piece)`;
+          b.onclick = () => openFocusedItem(f.extraItem);
+          content.appendChild(b);
+        }
+        return;
+      }
+      if(shownItem !== f.extraItem){ shownItem = f.extraItem; heading(`Item ${f.extraItem}`, 'optional'); }
     }
     content.appendChild(buildFocusedField(f, row, cIdx));
   });
