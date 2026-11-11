@@ -498,6 +498,8 @@
   .combo-opt .combo-label{flex:1;}
   .combo-del{flex-shrink:0;width:20px;height:20px;border:none;background:transparent;color:var(--ink-soft);border-radius:50%;font-size:15px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;opacity:.55;margin-left:6px;}
   .combo-del:hover{opacity:1;background:#F6DEDA;color:var(--danger);}
+  .combo-del.armed{opacity:1;width:auto;padding:0 9px;border-radius:10px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;}
+  @media (hover:none){ .combo-del{margin-left:14px;width:26px;height:26px;} }
   .toast-action{margin-left:12px;background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font:inherit;font-weight:700;border-radius:4px;padding:3px 10px;cursor:pointer;pointer-events:auto;}
   .combo-head{font-size:11px;color:var(--ink-soft);padding:6px 10px 7px;border-bottom:1px solid var(--hairline);margin-bottom:4px;display:flex;align-items:center;gap:8px;justify-content:space-between;white-space:nowrap;}
   .combo-head > span:first-child{white-space:nowrap;}
@@ -898,7 +900,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.10.31.1</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -1206,7 +1208,7 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.10.31.1';
+const APP_VERSION = '2026.11.11.1';
 async function checkForNewVersion(){
   try{
     if(location.protocol === 'file:') return;
@@ -1217,7 +1219,17 @@ async function checkForNewVersion(){
     if(m && m[1] !== APP_VERSION) showUpdateBar(m[1]);
   }catch(e){}
 }
+let lastUserActivity = Date.now();
+['keydown','pointerdown','input','wheel','touchstart'].forEach(ev => document.addEventListener(ev, () => { lastUserActivity = Date.now(); }, { capture:true, passive:true }));
+function autoUpdateWhenIdle(){
+  // a tab left open on an old version must not keep working with old rules: reload once nobody is using it
+  const a = document.activeElement;
+  const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
+  const idle = document.visibilityState === 'hidden' || Date.now() - lastUserActivity > 90000;
+  if(idle && !typing && !(typeof comboState !== 'undefined' && comboState) && !(typeof hasUnsavedWork === 'function' && hasUnsavedWork())) reloadToNewVersion();
+}
 function showUpdateBar(v){
+  if(!window.__autoUpdateTimer) window.__autoUpdateTimer = setInterval(autoUpdateWhenIdle, 20000);
   if(document.getElementById('updateBar')) return;
   const el = document.createElement('div'); el.id = 'updateBar'; el.className = 'update-bar';
   el.innerHTML = `<span><b>A new version of this tool is available</b> (${v}). Reload to use it — your work is saved first.</span><button type="button" onclick="reloadToNewVersion()">Reload now</button>`;
@@ -1245,7 +1257,7 @@ if(SUPABASE_NOT_CONFIGURED){
 /* ========================================================================
    SCHEMA
    ======================================================================== */
-const CATALOG_VERSION = 6; // bump when the default catalog below changes, so saved configs pick it up once
+const CATALOG_VERSION = 7; // bump when the default catalog below changes, so saved configs pick it up once
 const CATEGORY_SUBCATS = {
   "Tableware": ["Dinner Sets","Plates","Bowls","Flatware","Serveware","Dessert","Platters","Salad & Pasta","Condiments & Dips","Cutlery","Napkins","Napkin Rings"],
   "Drinkware": ["Coffee","Tea","Cups","Mugs","Containers","Pots","Carafes"],
@@ -1821,6 +1833,10 @@ function applyConfig(data){
     if(k) ["Cutlery","Napkins","Napkin Rings"].forEach(v => { if(!CATEGORY_SUBCATS[k].some(x => String(x).toLowerCase() === v.toLowerCase())) CATEGORY_SUBCATS[k].push(v); });
   }
   if(data.customOptions && typeof data.customOptions === 'object') customOptions = data.customOptions;
+  if(savedVersion < 7){
+    // v7: options removed with the × (some by accident) are allowed back if a product still uses them
+    Object.keys(customOptions).filter(k => k.startsWith('__removed__')).forEach(k => { customOptions[k] = []; });
+  }
   seedColorList();
   if(!HAS_SORT_COLUMN && Array.isArray(data.productOrder) && !orderSavePending){
     const changed = data.productOrder.join(',') !== productOrder.join(',');
@@ -2001,6 +2017,7 @@ async function fetchAllData(){
   const cfgRow = cfgRes && cfgRes.data;
   lastServerConfig = cfgRow && cfgRow.data ? JSON.parse(JSON.stringify(cfgRow.data)) : null;
   applyConfig(cfgRow && cfgRow.data);
+  healOptionLists();
 
   const activityRows = actRes && actRes.data;
   activityLog = (activityRows||[]).map(a => ({ time: new Date(a.at).getTime(), text: a.text, user: a.actor }));
@@ -3222,8 +3239,16 @@ function renderComboMenu(filterText){
       ev.stopPropagation(); ev.preventDefault();
       const i = parseInt(btn.dataset.del, 10), val = st.items[i], f = st.input._field;
       if(!f || val === undefined) return;
+      // first tap only asks — so ticking an option on a phone can't remove it by accident
+      if(!btn.classList.contains('armed')){
+        comboMenuEl.querySelectorAll('.combo-del.armed').forEach(b => { b.classList.remove('armed'); b.textContent = '×'; });
+        btn.classList.add('armed'); btn.textContent = 'Remove?';
+        clearTimeout(btn._disarm); btn._disarm = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '×'; }, 3500);
+        return;
+      }
       const group = st.itemGroups && st.itemGroups[i] ? st.itemGroups[i] : null;
       const undoFn = removeOption(f, st.input._row, val, group);
+      try{ logActivity(`Removed option “${val}” from the ${f.name} list${group ? ' (' + group + ')' : ''}`); }catch(e){}
       renderComboMenu(st.filter);
       showToast(`Removed “${val}” from the ${f.name} list`, { label: 'Undo', fn: undoFn });
     });
@@ -3709,7 +3734,8 @@ function subSubGroupsFor(row){
   return groups;
 }
 /* After the subcategories change: keep third-level values that still fit one of them, or that belong to none (typed by hand) */
-function pruneAfterSubChange(row){
+function pruneAfterSubChange(row){ return false; }
+function _unusedPruneAfterSubChange(row){
   const ti = IDX["Sub-Subcategory"]; if(ti === undefined || ti < 0) return false;
   const before = row.values[ti] || "";
   if(!before) return false;
@@ -3740,10 +3766,9 @@ function subGroupsFor(row){
 /* After the categories change: keep every subcategory / material that still fits one of
    them (or that was typed by hand and belongs to no category); drop only the ones that
    belonged to a category that was removed. Nothing is cleared needlessly. */
-function pruneAfterCategoryChange(row){
-  _pruneCats(row);
-  pruneAfterSubChange(row);
-}
+/* Values a person typed are NEVER removed automatically any more (changing the category used to
+   "tidy up" subcategories, material and sub-subcategories). The dropdowns still group and suggest. */
+function pruneAfterCategoryChange(row){ return false; }
 function _pruneCats(row){
   const cats = catsOf(row);
   const si = IDX["Subcategory"], mi = IDX["Material"];
@@ -3800,6 +3825,16 @@ function removeOption(f, row, v, group){
   scheduleConfigSave();
   if(typeof updateSubcategoryFilterOptions === 'function') try{ updateSubcategoryFilterOptions(); }catch(e){}
   return () => { restoreOptionStores(snap); scheduleConfigSave(); if(comboState) renderComboMenu(comboState.filter); };
+}
+/* Self-healing lists: every value used on a product is in its dropdown (unless someone removed it
+   on purpose with the ×). So if a shared list is ever overwritten — an old tab, a lost save — it
+   rebuilds itself from the products the next time anyone opens the tool. */
+function healOptionLists(){
+  try{
+    const before = optionStoresSnapshot();
+    rows.forEach(r => flatFields.forEach((f, i) => { if(COMBO_TYPES.includes(f.type) && r.values[i]) learnOption(f, r, r.values[i], true); }));
+    if(optionStoresSnapshot() !== before) scheduleConfigSave();
+  }catch(e){ console.error('healOptionLists', e); }
 }
 function optionsFor(f, row){
   const cats = catsOf(row);
