@@ -190,6 +190,22 @@
   .view-pill{font-size:11.5px;padding:6px 13px;border-radius:20px;border:1px solid var(--hairline-strong);background:var(--white);color:var(--ink-soft);cursor:pointer;}
   .view-pill:hover{border-color:var(--brass);color:var(--ink);}
   .view-pill.active{background:var(--charcoal);border-color:var(--charcoal);color:var(--brass-light);}
+  /* ---- Sold Out list ---- */
+  .view-pill.sold-pill{border-color:#B9A38B;color:#7A3B2E;}
+  .view-pill.sold-pill.active{background:#7A3B2E;border-color:#7A3B2E;color:#F6EDE4;}
+  .sold-count{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:10px;background:rgba(122,59,46,0.12);font-size:10.5px;text-align:center;}
+  .view-pill.sold-pill.active .sold-count{background:rgba(255,255,255,0.2);}
+  .sold-note{display:none;margin:0 32px 10px;padding:8px 14px;border-radius:4px;background:#F6EDE4;border:1px solid #E2CDBB;color:#7A3B2E;font-size:12.5px;}
+  body.sold-mode .sold-note{display:block;}
+  .pos-num.sold-num{color:#7A3B2E;font-weight:600;}
+  .pos-num.sold-num.mpos{display:block;margin-top:8px;width:34px;text-align:center;font-size:12px;min-width:0;}
+  .bulk-bar .sold-off-btn{display:none;}
+  body.sold-mode .bulk-bar .sold-off-btn{display:inline-block;}
+  body.sold-mode .bulk-bar .sold-on-btn, body.sold-mode .bulk-bar .bulk-move{display:none;}
+  .fh-sold-btn{font:inherit;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid #B9A38B;background:transparent;color:#7A3B2E;cursor:pointer;}
+  .fh-sold-btn.on{background:#7A3B2E;border-color:#7A3B2E;color:#F6EDE4;}
+  .icon.soldbtn{font-size:10.5px;width:auto;padding:0 7px;color:#7A3B2E;white-space:nowrap;}
+  .icon.soldbtn.on{background:#7A3B2E;color:#F6EDE4;}
   .filters-panel{max-width:1700px;margin:0 auto;padding:14px 32px;display:none;gap:14px;flex-wrap:wrap;background:var(--ivory-2);border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);}
   .filters-panel.show{display:flex;}
   .filter-field{display:flex;flex-direction:column;gap:4px;}
@@ -913,7 +929,7 @@ applyPhoneLayout(computePhoneLayout());
       <div class="brandmark">Cup <span class="amp">&amp;</span> Saucer</div>
       <div class="eyebrow">Product Catalog · Data Entry</div>
       <h1>Master Product Data Entry</h1>
-      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.11.6</span></div>
+      <div class="meta-line">Approved field set · <strong>7 sections</strong> · <strong id="fieldCountTop">–</strong> fields per product · <span class="app-version" title="Version of this tool running on this device">Version 2026.11.24.1</span></div>
       <div class="user-line">
         Working as <input id="currentUserInput" class="user-input" type="text" placeholder="Your name">
         <span class="save-status" id="saveStatus">Connecting…</span>
@@ -998,7 +1014,9 @@ applyPhoneLayout(computePhoneLayout());
   <button class="view-pill" data-view="noarabic" onclick="applyView('noarabic')">Missing Arabic</button>
   <button class="view-pill" data-view="lowstock" onclick="applyView('lowstock')">Low Stock</button>
   <button class="view-pill" data-view="recent" onclick="applyView('recent')">Recently Added</button>
+  <button class="view-pill sold-pill" data-view="sold" onclick="applyView('sold')" title="Products marked Sold Out — kept apart and not counted with the products">Sold Out <span class="sold-count" id="soldCount">0</span></button>
 </div>
+<div class="sold-note" id="soldNote">Sold Out list — these products are kept apart from the main list: numbered 1, 2, 3… on their own and not counted with the products. Tick some and press "↩ Back on sale" to return them to their place.</div>
 
 <div class="filters-panel" id="filtersPanel">
   <div class="filter-field">
@@ -1114,6 +1132,8 @@ applyPhoneLayout(computePhoneLayout());
     <input type="text" inputmode="numeric" class="bulk-pos" placeholder="Move to #" aria-label="Move ticked products to position"
       onkeydown="if(event.key==='Enter'){event.preventDefault(); bulkMoveTo(this); this.blur();}">
   </span>
+  <button class="btn-ghost sold-on-btn" onclick="bulkSoldOut(true)" title="Move the ticked products to the Sold Out list">⊘ Mark Sold Out</button>
+  <button class="btn-ghost sold-off-btn" onclick="bulkSoldOut(false)" title="Put the ticked products back in the main list">↩ Back on sale</button>
   <button class="btn-ghost" onclick="bulkDuplicate()" title="Duplicate the ticked products without their photos">Duplicate Selected</button>
   <div class="more-wrap export-wrap">
     <button class="btn-ghost" type="button" onclick="toggleExportMenu(event, 'bulkExportMenu')">⬇ Export Selected ▾</button>
@@ -1221,7 +1241,7 @@ applyPhoneLayout(computePhoneLayout());
    ======================================================================== */
 /* ---- Version check: when a newer version of this page is uploaded, every open device
    shows a bar to reload it (old copies left open are what cause old bugs to come back). ---- */
-const APP_VERSION = '2026.11.11.6';
+const APP_VERSION = '2026.11.24.1';
 const OPTIONS_ARCHIVE_KEY = 'cs_pde_options_archive_v1';
 const PRIOR_DEVICE_LISTS = (function(){
   const out = [];
@@ -1386,11 +1406,20 @@ flatFields.forEach((f,i)=> IDX[f.name]=i);
 /* How values are SAVED (database, backups): the original order, with fields added later at
    the end. On screen, a field can sit anywhere (Rim shows right after Color) — values are
    converted at the save/load boundary only, so existing products never shift. */
-const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory", "Item 2 Name", "Item 2 Width", "Item 2 Length", "Item 2 Height", "Item 2 Depth", "Item 2 Diameter", "Item 2 Capacity", "Item 3 Name", "Item 3 Width", "Item 3 Length", "Item 3 Height", "Item 3 Depth", "Item 3 Diameter", "Item 3 Capacity", "Item 1 Name"];
+const FIELDS_ADDED_LATER = ["Rim", "Sub-Subcategory", "Item 2 Name", "Item 2 Width", "Item 2 Length", "Item 2 Height", "Item 2 Depth", "Item 2 Diameter", "Item 2 Capacity", "Item 3 Name", "Item 3 Width", "Item 3 Length", "Item 3 Height", "Item 3 Depth", "Item 3 Diameter", "Item 3 Capacity", "Item 1 Name", "Sold Out"];
 const STORE_FIELDS = flatFields.map(f => f.name).filter(n => !FIELDS_ADDED_LATER.includes(n)).concat(FIELDS_ADDED_LATER);
 const STORE_LEN = STORE_FIELDS.length;
-const D2S = flatFields.map(f => STORE_FIELDS.indexOf(f.name));     // screen position → saved position
-const S2D = STORE_FIELDS.map(n => IDX[n]);                          // saved position → screen position
+/* "Sold Out" is not a column: it's a hidden mark kept in one extra slot after all the fields.
+   Its value is the number the product had in the main list when it was marked (so "Back to
+   sale" can put it back there). Sold-out products are kept apart from the main list: they're
+   numbered 1, 2, 3… on their own and are not counted with the products. */
+const SOLD_FIELD = "Sold Out";
+const SOLD_IDX = flatFields.length;          // the hidden slot in each product's values
+const VAL_LEN = flatFields.length + 1;
+const SOLD_BASE = 1000000;                   // sold-out products' saved positions start here, after the main list
+const D2S = flatFields.map(f => STORE_FIELDS.indexOf(f.name)).concat([STORE_FIELDS.indexOf(SOLD_FIELD)]);   // screen position → saved position
+const S2D = STORE_FIELDS.map(n => n === SOLD_FIELD ? SOLD_IDX : IDX[n]);                                 // saved position → screen position
+function isSold(r){ const v = r && r.values ? r.values[SOLD_IDX] : ''; return !!(v && String(v).trim()); }
 function toStoreVals(disp){ return S2D.map(d => (disp[d] === undefined || disp[d] === null) ? "" : disp[d]); }
 document.getElementById('fieldCountTop').textContent = flatFields.filter(f => !f.extraItem).length;
 document.getElementById('statFields').textContent = flatFields.filter(f => !f.extraItem).length;
@@ -2120,13 +2149,14 @@ function applyRemoteRowChange(payload, fromSync){
   if(moved){ clearTimeout(orderReconcileTimer); orderReconcileTimer = setTimeout(reconcileOrder, 1500); }
   {
     const sameContent = localVals.every((v,i) => sv(v) === sv(incoming.values[i]));
+    const soldChanged = !!sv(localVals[SOLD_IDX]) !== !!sv(incoming.values[SOLD_IDX]);
     const imageChanged = sv(localVals[IDX["Product Image"]]) !== sv(incoming.values[IDX["Product Image"]]);
     // keep the SAME object (the table's input handlers point at it) — just update its contents
     const vals = incoming.values; delete incoming.values;
     Object.assign(cur, incoming);
     vals.forEach((v,i) => { cur.values[i] = v; });
     if(keepLocal.length && rowNeedsSave(cur)) persistRow(cur);
-    if(moved){ scheduleRender(); return; }          // position changed → redraw once
+    if(moved || soldChanged){ numCacheClear(); scheduleRender(); return; }          // position changed / moved to or from Sold Out → redraw once
     if(sameContent) return;                          // our own save coming back → nothing to redraw
     if(imageChanged || !patchRowInPlace(cur)) scheduleRender();
   }
@@ -2199,6 +2229,7 @@ async function initApp(){
     if(n) setTimeout(()=>showToast(`Recovered ${n} unsaved change${n===1?'':'s'} from last time — saving now`), 400);
   }
   initialLoadDone = ok;
+  if(ok) normalizeOrder();
   renderBody();
   updateUndoRedoButtons();
   setSaveStatus(ok ? 'Synced ✓ · live' : 'Offline — showing local backup, will resync automatically');
@@ -2261,11 +2292,12 @@ function openRowMenu(e, rIdx){
   m.innerHTML =
     item('<span class="mi">👁</span>Quick preview', `openPreview(${rIdx})`) +
     item('<span class="mi">⤢</span>Open in Focused Mode', `openFocusedMode(${rIdx})`) +
-    item(`<span class="mi">${ROW_ABOVE_ICON}</span>Copy everything from row above (no photo)`, `copyFromRowAbove(${rIdx})`, '', rIdx===0) +
-    (isPlaced(row) ? item('<span class="mi">' + INSERT_ICON + '</span>Insert new product above', `insertRowAbove(${rIdx})`) + item('<span class="mi">' + INSERT_ICON + '</span>Insert new product below', `insertRowBelow(${rIdx})`) : '') +
+    item(`<span class="mi">${ROW_ABOVE_ICON}</span>Copy everything from row above (no photo)`, `copyFromRowAbove(${rIdx})`, '', rowAboveIdx(rIdx) < 0) +
+    (isPlaced(row) && !isSold(row) ? item('<span class="mi">' + INSERT_ICON + '</span>Insert new product above', `insertRowAbove(${rIdx})`) + item('<span class="mi">' + INSERT_ICON + '</span>Insert new product below', `insertRowBelow(${rIdx})`) : '') +
     item('<span class="mi">⧉</span>Duplicate without photo', `duplicateRow(${rIdx})`) +
     (started ? item('<span class="mi">' + COPY_ICON + '</span>Copy data (without photo)', `copyRowData(${rIdx})`) : '') +
     (copiedRowValues ? item('<span class="mi">' + PASTE_ICON + '</span>Paste copied data here', `pasteRowData(${rIdx})`) : '') +
+    (started ? '<div class="more-sep"></div>' + (isSold(row) ? item('<span class="mi">↩</span>Back on sale (return to the main list)', `toggleSold(${rIdx})`) : item('<span class="mi">⊘</span>Mark as Sold Out', `toggleSold(${rIdx})`)) : '') +
     '<div class="more-sep"></div>' +
     item('<span class="mi">✕</span>Delete row', `deleteRow(${rIdx})`, 'danger');
   m.dataset.row = String(rIdx);
@@ -2468,7 +2500,7 @@ async function handleTranslateClick(btn, row, cIdx, sourceFieldName, onDone){
    ROW HELPERS
    ======================================================================== */
 function newRow(){
-  return { _mine: true, id: newId(), values: new Array(flatFields.length).fill(""), createdAt: Date.now(), createdBy: currentUser || 'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser || 'Unassigned' };
+  return { _mine: true, id: newId(), values: new Array(VAL_LEN).fill(""), createdAt: Date.now(), createdBy: currentUser || 'Unassigned', lastEditedAt: Date.now(), lastEditedBy: currentUser || 'Unassigned' };
 }
 /* ========================================================================
    DESCRIPTION GENERATOR
@@ -2611,17 +2643,26 @@ function deleteRow(idx){
 }
 /* One click: fill this product with everything from the product above it — except the photo
    (and its own SKU / Barcode, which must stay unique). Undo (Ctrl+Z) puts it back. */
+/* the product above in the same list (main list or Sold Out), or -1 */
+function rowAboveIdx(idx){
+  const sold = isSold(rows[idx]);
+  for(let i = idx - 1; i >= 0; i--) if(isSold(rows[i]) === sold) return i;
+  return -1;
+}
 function copyFromRowAbove(idx){
-  if(idx===0) return;
-  const above = rows[idx-1];
-  mutateWithHistory(`Row ${idx+1}: copied the information from row ${idx}`, ()=>{
+  const ai = rowAboveIdx(idx);
+  if(ai < 0) return;
+  const above = rows[ai];
+  const me = dispNo(idx), them = dispNo(ai);
+  mutateWithHistory(`Row ${me}: copied the information from row ${them}`, ()=>{
     const target = rows[idx];
     const keep = ["Product Image", "SKU", "Barcode / EAN / UPC"].map(n => [IDX[n], target.values[IDX[n]] || ""]);
+    keep.push([SOLD_IDX, target.values[SOLD_IDX] || ""]);   // stays in its own list
     target.values = above.values.slice();
     keep.forEach(([i, v]) => { if(i > -1) target.values[i] = v; });
     stampEdit(target);
   });
-  showToast(`#${idx+1} now has the information of #${idx} — photo, SKU and Barcode kept. Undo with Ctrl+Z`);
+  showToast(`#${me} now has the information of #${them} — photo, SKU and Barcode kept. Undo with Ctrl+Z`);
 }
 function fillDownColumn(fromRowIdx, cIdx){
   const value = rows[fromRowIdx].values[cIdx];
@@ -2629,7 +2670,9 @@ function fillDownColumn(fromRowIdx, cIdx){
   if(remaining<=0) return;
   if(remaining>15 && !confirm(`Fill this value down into ${remaining} rows below?`)) return;
   mutateWithHistory(`Filled "${value}" down ${remaining} row(s) in ${flatFields[cIdx].name}`, ()=>{
+    const srcSold = isSold(rows[fromRowIdx]);
     for(let i=fromRowIdx+1;i<rows.length;i++){
+      if(isSold(rows[i]) !== srcSold) continue;           // only the list being looked at
       if(isNotApplicable(rows[i].values[IDX["Main Category"]], flatFields[cIdx].name)) continue;
       rows[i].values[cIdx] = value;
       stampEdit(rows[i]);
@@ -2818,6 +2861,7 @@ function applyStep(step, dir){
 function mutateWithHistory(label, fn){
   const snap = cloneRows();
   fn();
+  numCacheClear();
   { const step = makeUndoStep(snap, cloneRows()); if(step){ undoStack.push(step); if(undoStack.length>50) undoStack.shift(); } }
   redoStack = [];
   logActivity(label);
@@ -3462,13 +3506,76 @@ function applyProductOrder(){
    specific position (even while still empty). Other empty rows sit at the bottom. */
 function isPlaced(r){ return rowHasAnyValue(r) || (typeof r.sortOrder === 'number' && isFinite(r.sortOrder)); }
 function renumberOrder(){
-  let n = 0;
-  rows.forEach(r=>{ if(isPlaced(r)){ n += 1; r.sortOrder = n; } });
+  // main list: 1, 2, 3…  ·  sold-out list: its own numbers, kept after the main list
+  const main = [], sold = [], loose = [];
+  rows.forEach(r => (!isPlaced(r) ? loose : isSold(r) ? sold : main).push(r));
+  if(sold.length){ const arranged = main.concat(sold, loose); if(arranged.some((r, i) => r !== rows[i])) rows = arranged; }
+  main.forEach((r, i) => { r.sortOrder = i + 1; });
+  sold.forEach((r, i) => { r.sortOrder = SOLD_BASE + i + 1; });
+  numCacheClear();
+}
+/* ---- Numbers shown on screen: the main list counts 1, 2, 3… without the sold-out products;
+   the sold-out list counts 1, 2, 3… on its own. ---- */
+let soldMode = false;          // true while the "Sold Out" list is shown
+let _numCache = null;
+function numCacheClear(){ _numCache = null; }
+function numInfo(){
+  if(_numCache && _numCache.arr === rows && _numCache.len === rows.length) return _numCache;
+  const n = rows.length, pre = new Int32Array(n + 1);
+  let s = 0, mainPlaced = 0;
+  for(let i = 0; i < n; i++){ pre[i] = s; const r = rows[i]; if(isSold(r)) s++; else if(isPlaced(r)) mainPlaced++; }
+  pre[n] = s;
+  _numCache = { arr: rows, len: n, pre, sold: s, mainPlaced };
+  queueMicrotask(numCacheClear);
+  return _numCache;
+}
+function dispNo(i){
+  const r = rows[i]; if(!r) return i + 1;
+  const pre = numInfo().pre;
+  return isSold(r) ? pre[i] + 1 : i + 1 - pre[i];
+}
+function soldCount(){ return numInfo().sold; }
+function mainPlacedCount(){ return numInfo().mainPlaced; }
+/* Mark products as Sold Out (on = true) or put them back on sale (on = false). */
+function setSoldOut(ids, on){
+  const want = new Set((ids || []).map(String));
+  const list = rows.filter(r => want.has(String(r.id)) && rowHasAnyValue(r) && isSold(r) !== on);
+  if(!list.length) return 0;
+  const nameOf = r => (r.values[IDX["Product Name EN"]] || '').trim() || (r.values[IDX["SKU"]] || '').trim() || 'product';
+  const label = list.length === 1 ? `${on ? 'Marked as Sold Out' : 'Back on sale'}: ${nameOf(list[0])}` : `${on ? 'Marked as Sold Out' : 'Put back on sale'}: ${list.length} products`;
+  let backAt = [];
+  mutateWithHistory(label, ()=>{
+    if(on){
+      const nums = list.map(r => dispNo(rows.indexOf(r)));          // remember where each one was in the main list
+      const maxSold = rows.reduce((m, r) => isSold(r) && typeof r.sortOrder === 'number' ? Math.max(m, r.sortOrder) : m, SOLD_BASE);
+      list.forEach((r, k) => { r.values[SOLD_IDX] = String(nums[k]); r.sortOrder = maxSold + 1 + k; stampEdit(r); });   // newest at the end of the sold-out list
+    } else {
+      // back to the number it had before (or the end of the list if that number no longer exists)
+      const items = list.map(r => ({ r, n: parseInt(r.values[SOLD_IDX], 10) })).sort((a, b) => (a.n || 1e9) - (b.n || 1e9));
+      items.forEach(({ r, n }, k) => { r.values[SOLD_IDX] = ''; r.sortOrder = (n > 0 ? n - 0.5 : SOLD_BASE - 1) + k * 1e-6; stampEdit(r); });
+    }
+    const idx = rows.map((r, i) => ({ r, i, p: (typeof r.sortOrder === 'number' && isFinite(r.sortOrder) && isPlaced(r)) ? r.sortOrder : Infinity }));
+    idx.sort((a, b) => (a.p - b.p) || (a.i - b.i));
+    rows = idx.map(x => x.r);
+    renumberOrder();
+    if(!on) backAt = list.map(r => r.sortOrder);
+  });
+  commitOrder();
+  if(on) showToast(list.length === 1 ? `Moved to Sold Out — it's no longer counted with the products` : `${list.length} products moved to Sold Out`, { label:'Undo', fn: undo });
+  else showToast(list.length === 1 ? `Back on sale as #${backAt[0]}` : `${list.length} products are back on sale`, { label:'Undo', fn: undo });
+  return list.length;
+}
+function toggleSold(rIdx){ const r = rows[rIdx]; if(!r) return; setSoldOut([r.id], !isSold(r)); }
+function toggleSoldFocused(){ refocusById(); toggleSold(focusedRowIdx); if(focusedIsOpen()){ refocusById(); renderFocusedMode(); } }
+function bulkSoldOut(on){
+  const n = setSoldOut([...selectedRowIds], on);
+  if(n){ selectedRowIds.clear(); renderBody(); updateBulkBar(); }
+  else showToast(on ? 'The ticked products are already Sold Out' : 'None of the ticked products are Sold Out');
 }
 /* Insert a new, empty product at a position: everything from that position down moves by one.
    e.g. insert below #55 → the new row becomes #56, old #56 becomes #57, and so on. */
 function insertRowAt(index){
-  index = Math.max(0, Math.min(index, rows.filter(isPlaced).length));
+  index = Math.max(0, Math.min(index, mainPlacedCount()));
   const nr = newRow();
   nr.sortOrder = index + 0.5;              // temporary, renumbered right away
   mutateWithHistory(`Inserted a new product at position ${index+1}`, ()=>{
@@ -3526,7 +3633,7 @@ function jumpBy(n){
   const t = currentTopPos(); if(!t.count) return;
   const pos = Math.max(0, Math.min(t.count - 1, t.pos + n));
   goToPos(t, pos);
-  const label = isPhoneView() ? (+t.cards[pos].dataset.rowIndex + 1) : (vView[pos] + 1);
+  const label = isPhoneView() ? dispNo(+t.cards[pos].dataset.rowIndex) : dispNo(vView[pos]);
   showToast(`Now at #${label}`);
 }
 function jumpToEnd(dir){
@@ -3610,7 +3717,7 @@ async function flushOrder(){
 function ensureOrderNumbers(){
   if(!HAS_SORT_COLUMN || !initialLoadDone) return;
   let max = 0;
-  rows.forEach(r => { if(typeof r.sortOrder === 'number' && isFinite(r.sortOrder)) max = Math.max(max, r.sortOrder); });
+  rows.forEach(r => { if(typeof r.sortOrder === 'number' && isFinite(r.sortOrder) && r.sortOrder < SOLD_BASE) max = Math.max(max, r.sortOrder); });
   rows.forEach(r => {
     if(!rowHasAnyValue(r) || typeof r.sortOrder === 'number') return;
     if(!(r._mine || r._legacy)) return;          // another device created it — that device numbers it
@@ -3677,10 +3784,14 @@ function normalizeOrder(){
   if(!HAS_SORT_COLUMN || !initialLoadDone) return false;
   const placed = rows.filter(r => typeof r.sortOrder === 'number' && isFinite(r.sortOrder));
   const seen = new Set(); let bad = false;
-  placed.forEach(r => { if(seen.has(r.sortOrder)) bad = true; seen.add(r.sortOrder); });
+  // also: a Sold Out product must sit in the sold-out numbers, and a product on sale in the main numbers
+  placed.forEach(r => { if(seen.has(r.sortOrder)) bad = true; seen.add(r.sortOrder); if(isSold(r) !== (r.sortOrder >= SOLD_BASE)) bad = true; });
   if(!bad) return false;
-  placed.sort((a, b) => (a.sortOrder - b.sortOrder) || (String(a.id) < String(b.id) ? -1 : 1));
-  placed.forEach((r, i) => { if(r.sortOrder !== i + 1){ r.sortOrder = i + 1; markOrderUnsaved(r); } });
+  const key = r => isSold(r) ? (r.sortOrder >= SOLD_BASE ? r.sortOrder : Infinity) : (r.sortOrder < SOLD_BASE ? r.sortOrder : SOLD_BASE - 1);
+  placed.sort((a, b) => (isSold(a) - isSold(b)) || (key(a) - key(b)) || (a.sortOrder - b.sortOrder) || (String(a.id) < String(b.id) ? -1 : 1));
+  let n = 0, s = 0;
+  placed.forEach(r => { const v = isSold(r) ? SOLD_BASE + (++s) : ++n; if(r.sortOrder !== v){ r.sortOrder = v; markOrderUnsaved(r); } });
+  numCacheClear();
   return true;
 }
 setInterval(() => { if(document.visibilityState === 'visible') syncCheck(); }, 45000);
@@ -4248,19 +4359,20 @@ document.addEventListener('contextmenu', e => { if(e.target.closest && e.target.
    e.g. product 68 → type 40: it becomes #40 and #40–#67 each move down by one
    automatically (and moving up the list works the same in reverse). ---- */
 function posInputHTML(rIdx, extra){
-  return `<input class="pos-input ${extra||''}" type="text" inputmode="numeric" value="${rIdx+1}" aria-label="Position"
+  return `<input class="pos-input ${extra||''}" type="text" inputmode="numeric" value="${dispNo(rIdx)}" aria-label="Position"
     title="Position — type a new number and press Enter to move this product"
     onfocus="this.select()" onkeydown="posKey(event, this, ${rIdx})" onchange="setPosition(${rIdx}, this.value, this)">`;
 }
 function posKey(e, el, rIdx){
   e.stopPropagation();
   if(e.key === 'Enter'){ e.preventDefault(); el.blur(); }
-  else if(e.key === 'Escape'){ e.preventDefault(); el.value = rIdx + 1; el.blur(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); el.value = dispNo(rIdx); el.blur(); }
 }
 function setPosition(rIdx, raw, el){
-  const filledCount = rows.filter(isPlaced).length;
+  if(rows[rIdx] && isSold(rows[rIdx])){ if(el) el.value = dispNo(rIdx); return; }   // Sold Out products aren't in the main order
+  const filledCount = mainPlacedCount();
   let target = parseInt(String(raw).replace(/[^0-9]/g,''), 10);
-  if(isNaN(target)){ if(el) el.value = rIdx + 1; return; }
+  if(isNaN(target)){ if(el) el.value = dispNo(rIdx); return; }
   target = Math.max(1, Math.min(filledCount, target));
   const grp = groupFor(rIdx);
   if(grp){
@@ -4268,11 +4380,11 @@ function setPosition(rIdx, raw, el){
     const { next, first } = placeGroupAt(grp, target - 1);
     const view = holdView();
     if(applyGroupOrder(next, groupLabel(grp.length, first))) showToast(`${grp.length} products moved to #${first}–#${first + grp.length - 1}`);
-    else if(el) el.value = rIdx + 1;
+    else if(el) el.value = dispNo(rIdx);
     view();
     return;
   }
-  if(target === rIdx + 1){ if(el) el.value = rIdx + 1; return; }
+  if(target === dispNo(rIdx)){ if(el) el.value = target; return; }
   const to = target - 1;
   // Stay exactly where you are on the page — the product moves, the screen doesn't.
   const sc = tableScrollEl();
@@ -4307,7 +4419,7 @@ const SORT_LABELS = {
 };
 function applySort(key){
   if(!key || !SORT_LABELS[key]) return;
-  const filled = rows.filter(rowHasAnyValue);
+  const filled = rows.filter(r => rowHasAnyValue(r) && !isSold(r));   // the main list only — Sold Out keeps its own order
   if(filled.length < 2) return;
   if(!confirm(`Sort all products by "${SORT_LABELS[key]}"?\n\nThis changes the order for everyone. You can undo it with Ctrl/Cmd+Z.`)) return;
   const v = (r, f) => (r.values[IDX[f]] || '').toString().trim();
@@ -4328,7 +4440,7 @@ function applySort(key){
   }[key];
   mutateWithHistory(`Sorted products by ${SORT_LABELS[key]}`, ()=>{
     const sorted = filled.map((r,i)=>({r,i})).sort((a,b)=> cmp(a.r,b.r) || (a.i-b.i)).map(x=>x.r);
-    rows = sorted.concat(rows.filter(r=>!rowHasAnyValue(r)));
+    rows = sorted.concat(rows.filter(r => rowHasAnyValue(r) && isSold(r)), rows.filter(r=>!rowHasAnyValue(r)));
     renumberOrder();
   });
   commitOrder();
@@ -4571,7 +4683,7 @@ function buildLiteTr(row, rIdx){
   const tr = document.createElement('tr');
   tr.className = 'v-lite'; tr.dataset.rowIndex = rIdx;
   tr.style.height = vRowH + 'px';
-  let html = `<td class="rowno"><span class="rowtop"><span class="pos-num">${rIdx+1}</span></span></td>`;
+  let html = `<td class="rowno"><span class="rowtop"><span class="pos-num${isSold(row) ? ' sold-num' : ''}">${dispNo(rIdx)}</span></span></td>`;
   flatFields.forEach((f, i) => {
     const v = row.values[i];
     if(f.type === 'image') html += `<td class="td-img"><div class="lite-img">${v ? imgTag(v) : ''}</div></td>`;
@@ -4665,6 +4777,7 @@ function buildRowTr(row, rIdx, dupeInfo){
     const status = computeStatus(row);
     const pct = rowCompletionPct(row);
     const rowStarted = rowHasAnyValue(row); // false only for a completely untouched row — suppresses red highlighting
+    const sold = isSold(row);
     const tr = document.createElement('tr');
     tr.dataset.rowIndex = rIdx;
     if(selectedRowIds.has(row.id)) tr.classList.add('selected-row');
@@ -4674,17 +4787,17 @@ function buildRowTr(row, rIdx, dupeInfo){
     rowNoTd.innerHTML = `
       <span class="rowtop">
         <input type="checkbox" class="row-select" ${selectedRowIds.has(row.id)?'checked':''} onchange="toggleRowSelect(${row.id}, this.checked)">
-        <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${isPlaced(row) ? posInputHTML(rIdx) : `<span class="pos-num">${rIdx+1}</span>`}
-        ${isPlaced(row) ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
+        <span class="status-dot ${statusClass(status)}" title="${status} · ${pct}% complete"></span>${sold ? `<span class="pos-num sold-num" title="Sold Out #${dispNo(rIdx)}">${dispNo(rIdx)}</span>` : isPlaced(row) ? posInputHTML(rIdx) : `<span class="pos-num">${dispNo(rIdx)}</span>`}
+        ${isPlaced(row) && !sold ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : ``}
         <button type="button" class="row-more" title="Row actions" onclick="openRowMenu(event, ${rIdx})">⋯</button>
       </span>
       <span class="rowbtns">
         <button class="icon eye" title="Quick preview" onclick="openPreview(${rIdx})">👁</button>
         <button class="icon" title="Open Focused Mode" onclick="openFocusedMode(${rIdx})">⤢</button>
-        <button class="icon rowabove" title="Copy everything from the row above into this row (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(${rIdx})" ${rIdx===0?'disabled':''}>${ROW_ABOVE_ICON}</button>
+        <button class="icon rowabove" title="Copy everything from the row above into this row (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(${rIdx})" ${rowAboveIdx(rIdx) < 0 ? 'disabled' : ''}>${ROW_ABOVE_ICON}</button>
         <button class="icon dup" title="Duplicate this product without its photo (new SKU/Barcode to fill in)" onclick="duplicateRow(${rIdx})">⧉</button>
         <button class="icon del" title="Delete row" onclick="deleteRow(${rIdx})">✕</button>
-        ${isPlaced(row) ? `<button class="icon insrow" title="Insert a new product below this one" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>` : ``}
+        ${isPlaced(row) && !sold ? `<button class="icon insrow" title="Insert a new product below this one" onclick="insertRowBelow(${rIdx})">${INSERT_ICON}</button>` : ``}
         ${rowStarted ? `<button class="icon copyrow" title="Copy this product's data (without photo)" onclick="copyRowData(${rIdx})">${COPY_ICON}</button>` : ``}
         ${copiedRowValues ? `<button class="icon pasterow" title="Paste copied product data here (keeps photo, SKU, Barcode)" onclick="pasteRowData(${rIdx})">${PASTE_ICON}</button>` : ``}
       </span>`;
@@ -4922,7 +5035,7 @@ function buildRowTr(row, rIdx, dupeInfo){
 const cardCache = new Map();          // row id -> { el, sig }
 function escHtml(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ri(id){ return rows.findIndex(r => r.id === id); }   // current position of a product (cards are reused, so look it up on click)
-function buildCard(row, status, pct, rowStarted, sel, placed){
+function buildCard(row, status, pct, rowStarted, sel, placed, sold){
   const name = (row.values[IDX["Product Name EN"]] || "").trim();
   const sku = (row.values[IDX["SKU"]] || "").trim();
   const category = row.values[IDX["Main Category"]];
@@ -4939,6 +5052,7 @@ function buildCard(row, status, pct, rowStarted, sel, placed){
         ${placed ? `<input class="pos-input mpos" type="text" inputmode="numeric" value="" aria-label="Position"
           title="Position — type a new number and press Enter to move this product"
           onfocus="this.select()" onkeydown="posKey(event, this, ri(${id}))" onchange="setPosition(ri(${id}), this.value, this)">` : ``}
+        ${sold ? `<span class="pos-num sold-num mpos" title="Sold Out number"></span>` : ``}
       </div>
       <div class="mcard-thumb">${imgUrl ? imgTag(imgUrl) : `<span class="mcard-noimg">No photo</span>`}</div>
       <div class="mcard-body">
@@ -4961,6 +5075,7 @@ function buildCard(row, status, pct, rowStarted, sel, placed){
           <button class="icon rowabove" title="Copy everything from the product above (not the photo, SKU or Barcode)" onclick="copyFromRowAbove(ri(${id}))" ${ri(id) === 0 ? 'disabled' : ''}>${ROW_ABOVE_ICON}</button>
         </div>` : ``}
         <div class="mcard-move">
+          ${rowStarted ? `<button class="icon soldbtn${sold ? ' on' : ''}" title="${sold ? 'Put back on sale (main list)' : 'Mark as Sold Out'}" onclick="toggleSold(ri(${id}))">${sold ? '↩ Sale' : 'Sold'}</button>` : ``}
           <button class="icon dup" title="Duplicate this product without its photo (new SKU/Barcode to fill in)" onclick="duplicateRow(ri(${id}))">⧉</button>
           <button class="icon del" title="Delete row" onclick="deleteRow(ri(${id}))">✕</button>
         </div>
@@ -4995,17 +5110,18 @@ function renderBody(){
     const rowStarted = rowHasAnyValue(row); // false only for a completely untouched row — suppresses red highlighting
 
    {   // ---- phone card: reused when nothing on it changed, so moving/deleting is instant
-    const sel = selectedRowIds.has(row.id), placed = isPlaced(row);
-    const sig = [row.values[IDX["Product Name EN"]], row.values[IDX["SKU"]], row.values[IDX["Main Category"]], row.values[IDX["Regular Price"]], row.values[IDX["Product Image"]], status, pct, sel, placed, rowStarted, !!copiedRowValues, rows[0] === row].join('\u0001');
+    const sold = isSold(row), sel = selectedRowIds.has(row.id), placed = isPlaced(row) && !sold;
+    const sig = [row.values[IDX["Product Name EN"]], row.values[IDX["SKU"]], row.values[IDX["Main Category"]], row.values[IDX["Regular Price"]], row.values[IDX["Product Image"]], status, pct, sel, placed, sold, rowStarted, !!copiedRowValues, rows[0] === row].join('\u0001');
     let c = cardCache.get(row.id);
-    if(!c || c.sig !== sig){ c = { el: buildCard(row, status, pct, rowStarted, sel, placed), sig }; cardCache.set(row.id, c); }
+    if(!c || c.sig !== sig){ c = { el: buildCard(row, status, pct, rowStarted, sel, placed, sold), sig }; cardCache.set(row.id, c); }
     const card = c.el;
     card.dataset.rowIndex = rIdx;
     const pi = card.querySelector('.pos-input');
-    if(pi && document.activeElement !== pi) pi.value = rIdx + 1;
+    if(pi && document.activeElement !== pi) pi.value = dispNo(rIdx);
+    const sn = card.querySelector('.sold-num'); if(sn) sn.textContent = dispNo(rIdx);
     const up = card.querySelector('button[title="Move up"]'), dn = card.querySelector('button[title="Move down"]');
     if(up) up.disabled = rIdx === 0;
-    if(dn) dn.disabled = !(rIdx + 1 < rows.length && isPlaced(rows[rIdx + 1]));
+    if(dn) dn.disabled = !(rIdx + 1 < rows.length && isPlaced(rows[rIdx + 1]) && !isSold(rows[rIdx + 1]));
     cfrag.appendChild(card);
     liveIds.add(row.id);
    }
@@ -5171,7 +5287,8 @@ function refreshFocusedHeader(){
 }
 function updateStats(){
   const dupeInfo = getDupeSets();
-  const P = rows.filter(rowHasAnyValue);   // empty rows aren't products
+  const P = rows.filter(r => rowHasAnyValue(r) && !isSold(r));   // empty rows aren't products; Sold Out ones are counted on their own
+  { const sc = document.getElementById('soldCount'); if(sc) sc.textContent = soldCount(); }
   document.getElementById('statRows').textContent = P.length;
   const total = P.length * CORE_IDX.length;
   const filled = P.reduce((acc, row) => acc + CORE_IDX.filter(i => { const v = row.values[i]; return v && v.toString().trim() !== ""; }).length, 0);
@@ -5223,7 +5340,8 @@ function parseRowQuery(q){
 function buildFilterPass(){
   const q = (document.getElementById('searchBox').value || "").toLowerCase().trim();
   const rowQ = q ? parseRowQuery(q) : null;
-  const posOf = rowQ ? new Map(rows.map((r, i) => [r, i + 1])) : null;
+  const posOf = rowQ ? new Map(rows.map((r, i) => [r, dispNo(i)])) : null;
+  const inSold = soldMode;
   const onlyIncomplete = document.getElementById('onlyIncomplete').checked;
   const onlyDupes = document.getElementById('onlyDupes').checked;
   const onlyInvalid = document.getElementById('onlyInvalid').checked;
@@ -5238,6 +5356,7 @@ function buildFilterPass(){
   const fToday = document.getElementById('fToday').checked;
   const dupeInfo = getDupeSets();
   const pass = (row) => {
+    if(isSold(row) !== inSold) return false;          // the main list and the Sold Out list are kept apart
     let show = true;
     if(q){
       if(rowQ){
@@ -5268,8 +5387,9 @@ function buildFilterPass(){
 /* Row indices you can currently see (search / filters applied), or null when nothing is filtered */
 function visibleIdxIfFiltered(){
   const pass = buildFilterPass();
-  const out = []; rows.forEach((r, i) => { if(pass(r)) out.push(i); });
-  return out.length === rows.length ? null : out;
+  const out = []; let all = 0;
+  rows.forEach((r, i) => { if(isSold(r) === soldMode) all++; if(pass(r)) out.push(i); });
+  return out.length === all ? null : out;
 }
 function applyFilters(forceRebuild){
   scheduleSelAllSync();
@@ -5314,10 +5434,18 @@ function toggleFiltersPanel(){
 /* ---- Saved views ---- */
 function setActiveView(name){
   document.querySelectorAll('.view-pill').forEach(p=> p.classList.toggle('active', p.dataset.view===name));
+  if(name !== 'sold') setSoldMode(false);
+}
+function setSoldMode(on){
+  soldMode = !!on;
+  document.body.classList.toggle('sold-mode', soldMode);
 }
 function applyView(name){
+  const wasSold = soldMode;
   resetFiltersQuiet();
   setActiveView(name);
+  setSoldMode(name === 'sold');
+  if(wasSold !== soldMode && selectedRowIds.size){ selectedRowIds.clear(); renderBody(); updateBulkBar(); }
   if(name==='incomplete') document.getElementById('fStatus').value = 'Incomplete';
   else if(name==='lowstock') document.getElementById('fStock').value = 'low';
   else if(name==='recent') document.getElementById('fToday').checked = true;
@@ -5345,7 +5473,7 @@ function resetFiltersQuiet(){
 
 /* ---- Entry queue ---- */
 function goToNextIncomplete(){
-  const idx = rows.findIndex(r => rowHasAnyValue(r) && computeStatus(r) === 'Incomplete');
+  const idx = rows.findIndex(r => rowHasAnyValue(r) && !isSold(r) && computeStatus(r) === 'Incomplete');
   if(idx === -1){ flashQueueText('Nothing incomplete — nice work.'); return; }
   applyView('all');
   const tr = ensureRowRendered(idx, true);
@@ -5460,7 +5588,7 @@ function bulkDuplicate(){
 }
 function copySelectedAsCSV(){
   const header = flatFields.map(f => f.name);
-  const selRows = rows.filter(r=>selectedRowIds.has(r.id)).map(r=>r.values);
+  const selRows = rows.filter(r=>selectedRowIds.has(r.id)).map(r=>r.values.slice(0, flatFields.length));
   const csvRows = [header, ...selRows];
   const csv = csvRows.map(r => r.map(c => `"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
   writeClipboard(csv).then(()=>showToast(`${selRows.length} selected product${selRows.length===1?'':'s'} copied as CSV`)).catch(()=>showToast('Copy failed — use Export instead'));
@@ -5734,8 +5862,15 @@ function closeFocusedMode(){
   document.getElementById('focusedOverlay').classList.remove('show');
   renderBody();
 }
-function focusedPrev(){ refocusById(); if(focusedRowIdx>0){ focusedRowIdx--; focusedRowId = rows[focusedRowIdx].id; renderFocusedMode(); } }
-function focusedNext(){ refocusById(); if(focusedRowIdx<rows.length-1){ focusedRowIdx++; focusedRowId = rows[focusedRowIdx].id; renderFocusedMode(); } }
+/* Previous / next product in the same list (the main list, or the Sold Out list) */
+function focusedNeighbour(d){
+  const cur = rows[focusedRowIdx]; if(!cur) return -1;
+  const sold = isSold(cur);
+  for(let i = focusedRowIdx + d; i >= 0 && i < rows.length; i += d) if(isSold(rows[i]) === sold) return i;
+  return -1;
+}
+function focusedPrev(){ refocusById(); const i = focusedNeighbour(-1); if(i > -1){ focusedRowIdx = i; focusedRowId = rows[i].id; renderFocusedMode(); } }
+function focusedNext(){ refocusById(); const i = focusedNeighbour(1); if(i > -1){ focusedRowIdx = i; focusedRowId = rows[i].id; renderFocusedMode(); } }
 function selectFocusedStep(key){ focusedStep = key; renderFocusedMode(); }
 
 function renderFocusedMode(){
@@ -5749,15 +5884,16 @@ function renderFocusedMode(){
   document.getElementById('fhCenter').innerHTML = `
     <div class="fh-title-row">
       <strong class="fh-title">${row.values[IDX["Product Name EN"]] || 'Untitled product'}</strong>
-      <span class="fh-count">Product ${focusedRowIdx+1} / ${Math.max(rows.filter(rowHasAnyValue).length, focusedRowIdx+1)}</span>
+      <span class="fh-count">${isSold(row) ? 'Sold Out' : 'Product'} ${dispNo(focusedRowIdx)} / ${isSold(row) ? soldCount() : Math.max(rows.filter(r => rowHasAnyValue(r) && !isSold(r)).length, dispNo(focusedRowIdx))}</span>
     </div>
     <div class="fh-meta-row">
       <span class="focused-status-pill">${status} · ${pct}%</span>
+      ${rowHasAnyValue(row) ? `<button type="button" class="fh-sold-btn${isSold(row) ? ' on' : ''}" onclick="toggleSoldFocused()" title="${isSold(row) ? 'Return this product to the main list' : 'Move this product to the Sold Out list'}">${isSold(row) ? '↩ Back on sale' : '⊘ Mark Sold Out'}</button>` : ``}
       <span id="focusedSaveStatus" class="fh-save">${document.getElementById('saveStatus').textContent}</span>
     </div>
   `;
-  document.getElementById('fhPrevBtn').disabled = focusedRowIdx===0;
-  document.getElementById('fhNextBtn').disabled = focusedRowIdx===rows.length-1;
+  document.getElementById('fhPrevBtn').disabled = focusedNeighbour(-1) < 0;
+  document.getElementById('fhNextBtn').disabled = focusedNeighbour(1) < 0;
 
   const stepper = document.getElementById('focusedStepper');
   stepper.innerHTML = '';
@@ -6140,7 +6276,7 @@ function deliverFile(blob, name, summary){
 }
 
 function exportCSV(){
-  const filled = rows.filter(rowHasAnyValue);
+  const filled = rows.filter(r => rowHasAnyValue(r) && isSold(r) === soldMode);   // the list being looked at (main list or Sold Out)
   const picked = filled.filter(r => selectedRowIds.has(r.id));
   const list = picked.length ? picked : filled;
   if(!list.length){ showToast('There are no products to export yet'); return; }
@@ -6150,7 +6286,7 @@ function exportCSV(){
   };
   const header = ['Position', ...flatFields.map(f => f.name)];
   const lines = [header.map(esc).join(',')];
-  list.forEach(r => lines.push([rows.indexOf(r) + 1, ...flatFields.map((f,i) => r.values[i] || '')].map(esc).join(',')));
+  list.forEach(r => lines.push([dispNo(rows.indexOf(r)), ...flatFields.map((f,i) => r.values[i] || '')].map(esc).join(',')));
   const csv = '\uFEFF' + lines.join('\r\n');           // BOM so Excel shows Arabic correctly
   const d = new Date();
   const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -6268,7 +6404,7 @@ async function photoToJpeg(url){
   return { data: new Uint8Array(await out.arrayBuffer()), w, h };
 }
 async function exportExcel(){
-  const filled = rows.filter(rowHasAnyValue);
+  const filled = rows.filter(r => rowHasAnyValue(r) && isSold(r) === soldMode);   // the list being looked at (main list or Sold Out)
   const picked = filled.filter(r => selectedRowIds.has(r.id));
   const list = picked.length ? picked : filled;
   if(!list.length){ showToast('There are no products to export yet'); return; }
@@ -6310,7 +6446,7 @@ async function exportExcel(){
     list.forEach((r, k) => {
       const rn = k + 2;
       const cells = [];
-      cells.push(`<c r="A${rn}" s="4"><v>${rows.indexOf(r) + 1}</v></c>`);
+      cells.push(`<c r="A${rn}" s="4"><v>${dispNo(rows.indexOf(r))}</v></c>`);
       cells.push(`<c r="B${rn}" s="2" t="inlineStr"><is><t>${photos[k] ? '' : xlEsc((r.values[imgIdx]||'').trim() ? 'Photo unavailable' : 'No photo')}</t></is></c>`);
       fields.forEach((f, j) => {
         const ref = xlCol(j + 2) + rn;
@@ -6419,12 +6555,12 @@ document.addEventListener('click', e => { if(!e.target.closest('.export-wrap')) 
 
 function copyAsCSV(){
   const header = flatFields.map(f => f.name);
-  const csvRows = [header, ...rows.filter(rowHasAnyValue).map(r=>r.values)];
+  const csvRows = [header, ...rows.filter(r => rowHasAnyValue(r) && isSold(r) === soldMode).map(r=>r.values.slice(0, flatFields.length))];
   const csv = csvRows.map(r => r.map(c => `"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
   writeClipboard(csv).then(()=>showToast('All products copied as CSV')).catch(()=>showToast('Copy failed — use Export CSV instead'));
 }
 function copyAsJSON(){
-  const out = rows.filter(rowHasAnyValue).map(row => {
+  const out = rows.filter(r => rowHasAnyValue(r) && isSold(r) === soldMode).map(row => {
     const obj = {};
     flatFields.forEach((f, i) => obj[f.name] = row.values[i] || "");
     return obj;
